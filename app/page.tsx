@@ -35,57 +35,71 @@ export default function Home() {
         <button className="md:hidden text-[#5d4037] text-3xl">☰</button>
       </nav>
 
-      <section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-10 md:gap-0">
+{/* HERO SECTION - tight & siksik version */}
+<section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
+  <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6 md:gap-8">
+    {/* Left: Text */}
+    <div className="md:w-1/2 text-left mt-4 md:mt-0">
+      <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
+        Enjoy rich flavor<br className="hidden md:block" /> and freshness
+      </h2>
+    </div>
 
-          <div className="md:w-1/2 text-left">
-            <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
-              Enjoy rich flavor<br className="hidden md:block" /> and freshness
-            </h2>
-          </div>
+    {/* Right: Images - very tight & compact */}
+    <div className="md:w-1/2 flex justify-end items-end relative">
+      <div className="flex items-end gap-2 md:gap-3 relative"> {/* super small gap */}
+        {/* Fries - small basket */}
+        <Image
+          src="/fries.jpg"
+          alt="Fries"
+          width={140}
+          height={120}
+          className="object-contain drop-shadow-lg -mb-8 z-20"
+        />
 
-          <div className="md:w-1/2 flex justify-end items-end relative">
-            <div className="flex items-end gap-4 md:gap-6">
+        {/* Burger - biggest & center */}
+        <Image
+          src="/burger.jpg"
+          alt="Burger"
+          width={320}
+          height={220}
+          className="object-contain drop-shadow-2xl z-30 -mb-10 md:-mb-12"
+          priority
+        />
 
-              <Image
-                src="fries.jpg"
-                alt="Fries"
-                width={180}
-                height={160}
-                className="object-contain drop-shadow-lg -mb-4"
-              />
-
-              <Image
-                src="burger.jpg"
-                alt="Burger"
-                width={320}
-                height={220}
-                className="object-contain drop-shadow-2xl z-10 -mb-8 md:-mb-10"
-                priority
-              />
-
-              <div className="relative">
-                <Image
-                  src="drinks.jpg"
-                  alt="Drinks"
-                  width={220}
-                  height={240}
-                  className="object-contain drop-shadow-xl"
-                />
-              </div>
-            </div>
-          </div>
+        {/* Drinks - rightmost, slightly overlapping burger */}
+        <div className="relative z-10">
+          <Image
+            src="/drinks.jpg"
+            alt="Drinks"
+            width={190}
+            height={210}
+            className="object-contain drop-shadow-xl -mb-6"
+          />
         </div>
 
-        <div className="flex justify-center gap-6 mt-12 md:mt-16">
-          <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Discover the drinks
-          </button>
-          <button className="bg-[#f57c00] hover:bg-[#ef6c00] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Order Now
-          </button>
-        </div>
-      </section>
+        {/* Ketchup/sauce - small, bottom right */}
+        <Image
+          src="/ketchup.jpg"  // optional, if naa ka image sa ketchup
+          alt="Ketchup"
+          width={80}
+          height={80}
+          className="absolute -bottom-6 -right-4 object-contain drop-shadow-md"
+        />
+      </div>
+    </div>
+  </div>
+
+  {/* Buttons - centered, exact style */}
+  <div className="flex justify-center gap-5 md:gap-8 mt-10 md:mt-12">
+    <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-9 py-4 rounded-lg font-semibold text-lg shadow-md transition">
+      Discover the drinks
+    </button>
+    <button className="bg-[#f57c00] hover:bg-[#ef6c00] text-white px-9 py-4 rounded-lg font-semibold text-lg shadow-md transition">
+      Order Now
+    </button>
+  </div>
+</section>
 
       {/* Footer */}
       <footer className="bg-[#FFF6DE] py-6 text-center text-[#6d4c41] text-sm border-t border-[#ffe082]">
