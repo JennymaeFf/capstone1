@@ -46,7 +46,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-end items-end gap-6 md:gap-12">
 
             <Image
-              src="fries.jpg"
+              src="fries.png"
               alt="Fries"
               width={200}
               height={180}
@@ -54,7 +54,7 @@ export default function Home() {
             />
 
             <Image
-              src="burger.jpg"
+              src="burger.png"
               alt="Burger"
               width={360}
               height={260}
