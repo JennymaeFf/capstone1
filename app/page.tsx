@@ -23,7 +23,6 @@ export default function Home() {
           />
           <div>
             <h1 className="text-[#5c4033] text-2xl font-bold tracking-wider">INDABEST CRAVE CORNER</h1>
-            <p className="text-[#8d6e63] text-xs -mt-1">We got your cravings covered!</p>
           </div>
         </div>
 
@@ -44,9 +43,9 @@ export default function Home() {
 
         {/* Images - fries, burger, drinks */}
         <div className="flex flex-wrap justify-center items-end gap-8 max-w-5xl mx-auto my-10">
-          <Image src="fries.jpeg" alt="Fries" width={220} height={180} className="drop-shadow-lg" />
-          <Image src="burger.jpeg" alt="Burger" width={380} height={260} className="drop-shadow-2xl -mb-6" priority />
-          <Image src="drinks.jpeg" alt="Drinks" width={240} height={200} className="drop-shadow-lg" />
+          <Image src="fries.jpg" alt="Fries" width={220} height={180} className="drop-shadow-lg" />
+          <Image src="burger.jpg" alt="Burger" width={380} height={260} className="drop-shadow-2xl -mb-6" priority />
+          <Image src="drinks.jpg" alt="Drinks" width={240} height={200} className="drop-shadow-lg" />
         </div>
 
         <div className="flex justify-center gap-6">
