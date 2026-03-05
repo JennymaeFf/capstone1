@@ -9,7 +9,7 @@ export default function Home() {
       <nav className="bg-[#fffde7] px-6 md:px-12 py-4 flex justify-between items-center border-b border-[#fff9c4]">
         <div className="flex items-center gap-4">
           <Image
-            src="/logo-burger-drink.png"  // ← butang ang imong logo diri sa public/
+            src="/logo.png"  // ← butang ang imong logo diri sa public/
             alt="INDABEST CRAVE CORNER Logo"
             width={60}
             height={60}
@@ -48,7 +48,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-end items-end gap-6 md:gap-12">
             {/* Fries */}
             <Image
-              src="/fries-basket.png"  // ← rename your image files accordingly
+              src="/friesjpg"  // ← rename your image files accordingly
               alt="Fries"
               width={180}
               height={180}
@@ -57,7 +57,7 @@ export default function Home() {
 
             {/* Burger */}
             <Image
-              src="/burger-cheese.png"
+              src="/burger.jpg"
               alt="Burger"
               width={340}
               height={240}
@@ -68,19 +68,11 @@ export default function Home() {
             {/* Drinks */}
             <div className="relative">
               <Image
-                src="/drinks-green-purple.png"
+                src="/drinks.jpg"
                 alt="Drinks"
                 width={260}
                 height={280}
                 className="object-contain drop-shadow-xl"
-              />
-              {/* Optional: add sauce/ketchup image if naa */}
-              <Image
-                src="/ketchup-small.png"
-                alt="Ketchup"
-                width={80}
-                height={80}
-                className="absolute -bottom-4 -right-6 object-contain"
               />
             </div>
           </div>
