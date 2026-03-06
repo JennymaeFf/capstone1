@@ -46,7 +46,6 @@ export default function Home() {
 
     <div className="md:w-1/2 flex justify-end items-end relative">
       <div className="flex items-end gap-2 md:gap-3 relative"> 
-
         <Image
           src="fries.jpg"
           alt="Fries"
@@ -54,7 +53,6 @@ export default function Home() {
           height={200}
           className="object-contain drop-shadow-lg -mb-8 z-20"
         />
-
         <Image
           src="burger.jpg"
           alt="Burger"
@@ -63,7 +61,6 @@ export default function Home() {
           className="object-contain drop-shadow-2xl z-30 -mb-10 md:-mb-12"
           priority
         />
-
         <div className="relative z-10">
           <Image
             src="drinks.jpg"
