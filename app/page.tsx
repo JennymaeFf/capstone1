@@ -61,16 +61,6 @@ export default function Home() {
           className="object-contain drop-shadow-2xl z-30 -mb-10 md:-mb-12"
           priority
         />
-        <div className="relative z-10">
-          <Image
-            src="drinks.jpg"
-            alt="Drinks"
-            width={300}
-            height={450}
-            className="object-contain drop-shadow-xl -mb-6"
-          />
-        </div>
-
       </div>
     </div>
   </div>
