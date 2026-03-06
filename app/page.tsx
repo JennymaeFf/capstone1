@@ -65,8 +65,8 @@ export default function Home() {
           <Image
             src="drinks.jpg"
             alt="Drinks"
-            width={250}
-            height={200}
+            width={300}
+            height={350}
             className="object-contain drop-shadow-xl -mb-6"
           />
         </div>
