@@ -29,17 +29,17 @@ export default function Home() {
           <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-          <li><Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link></li>
+          <li><Link href="/login" className="font-semibold text-[] hover:text-[#388e3c]">LOGIN</Link></li>
         </ul>
 
         <button className="md:hidden text-[#000000] text-3xl">☰</button>
       </nav>
 
-<section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
+<section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]#4caf50">
   <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6 md:gap-8">
 
     <div className="md:w-1/2 text-left mt-4 md:mt-0">
-      <h2 className="text-4xl md:text-6xl font-bold text-[#000000 ] leading-tight">
+      <h2 className="text-4xl md:text-6xl font-bold text-[#000000] leading-tight">
         Enjoy rich flavor<br className="hidden md:block" /> and freshness
       </h2>
     </div>
