@@ -49,15 +49,15 @@ export default function Home() {
         <Image
           src="fries.jpg"
           alt="Fries"
-          width={320}
-          height={200}
+          width={300}
+          height={150}
           className="object-contain drop-shadow-lg -mb-8 z-20"
         />
         <Image
           src="burger.jpg"
           alt="Burger"
-          width={320}
-          height={200}
+          width={300}
+          height={150}
           className="object-contain drop-shadow-2xl z-30 -mb-10 md:-mb-12"
           priority
         />
@@ -65,8 +65,8 @@ export default function Home() {
           <Image
             src="drinks.jpg"
             alt="Drinks"
-            width={320}
-            height={200}
+            width={300}
+            height={150}
             className="object-contain drop-shadow-xl -mb-6"
           />
         </div>
