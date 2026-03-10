@@ -36,49 +36,51 @@ export default function Home() {
         <button className="md:hidden text-[#5d4037] text-3xl">☰</button>
       </nav>
 
-      {/* HERO SECTION */}
-      <section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6 md:gap-10">
-          {/* Left: Text */}
-          <div className="md:w-1/2 text-left mt-4 md:mt-0">
-            <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
-              Enjoy rich flavor<br className="hidden md:block" /> and freshness
-            </h2>
-          </div>
+      {/* HERO SECTION - fixed overflow, tighter layout */}
+<section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
+  <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6 md:gap-10">
+    {/* Left: Text */}
+    <div className="md:w-1/2 text-left mt-4 md:mt-0">
+      <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
+        Enjoy rich flavor<br className="hidden md:block" /> and freshness
+      </h2>
+    </div>
 
-          {/* Right: Images - tight & compact */}
-          <div className="md:w-1/2 flex justify-end items-end relative overflow-hidden">
-            <div className="flex items-end gap-2 md:gap-3 relative">
-              <Image
-                src="/fries.png"  
-                alt="Fries"
-                width={200}
-                height={200}
-                className="object-contain drop-shadow-lg -mb-4 z-20"
-              />
+    {/* Right: Images - no overflow, tighter grouping */}
+    <div className="md:w-1/2 flex justify-end items-end relative overflow-hidden">
+      <div className="flex items-end gap-3 md:gap-4"> {/* tight gap, no big space */}
+        {/* Fries - small & positioned */}
+        <Image
+          src="/fries.png"
+          alt="Fries"
+          width={150}
+          height={130}
+          className="object-contain drop-shadow-lg -mb-4 z-20"
+        />
 
-              <Image
-                src="/burger.png"  
-                alt="Burger"
-                width={280}
-                height={200}
-                className="object-contain drop-shadow-2xl z-30 -mb-4"
-                priority
-              />
-            </div>
-          </div>
-        </div>
+        {/* Burger - center, no negative margin overflow */}
+        <Image
+          src="/burger.png"
+          alt="Burger"
+          width={300}
+          height={210}
+          className="object-contain drop-shadow-2xl z-30 -mb-6"  // reduced negative margin para dili molapas
+          priority
+        />
+      </div>
+    </div>
+  </div>
 
-        {/* Buttons */}
-        <div className="flex justify-center gap-6 mt-10 md:mt-12">
-          <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Discover the drinks
-          </button>
-          <button className="bg-[#f57c00] hover:bg-[#ef6c00] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Order Now
-          </button>
-        </div>
-      </section>
+  {/* Buttons */}
+  <div className="flex justify-center gap-6 mt-10 md:mt-14">
+    <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
+      Discover the drinks
+    </button>
+    <button className="bg-[#f57c00] hover:bg-[#ef6c00] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
+      Order Now
+    </button>
+  </div>
+</section>
 
       {/* Footer */}
       <footer className="bg-[#FFF6DE] py-6 text-center text-[#6d4c41] text-sm border-t border-[#ffe082]">
