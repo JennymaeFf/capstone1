@@ -50,8 +50,8 @@ export default function Home() {
         <Image
           src="fries.png"
           alt="Fries"
-          width={500}   
-          height={500}
+          width={400}   
+          height={400}
           className="object-contain drop-shadow-lg -mb-6"
         />
 
