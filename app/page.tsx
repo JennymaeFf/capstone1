@@ -10,8 +10,8 @@ export default function Home() {
           <Image
             src="logo.png"
             alt="INDABEST CRAVE CORNER Logo"
-            width={200}    
-            height={200}  
+            width={150}    
+            height={150}  
             className="object-contain"
           />
           <div>
