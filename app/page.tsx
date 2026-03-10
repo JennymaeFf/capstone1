@@ -10,8 +10,8 @@ export default function Home() {
           <Image
             src="logo.png"
             alt="INDABEST CRAVE CORNER Logo"
-            width={150}    
-            height={150}  
+            width={100}    
+            height={100}  
             className="object-contain"
           />
           <div>
@@ -45,24 +45,24 @@ export default function Home() {
     </div>
 
     <div className="md:w-1/2 flex justify-end items-end relative">
-      <div className="flex items-end gap-3 md:gap-4"> 
-
+      <div className="flex items-end gap-3 md:gap-4">
         <Image
-          src="fries.png"
+          src="/fries.jpg"
           alt="Fries"
-          width={350}   
-          height={350}
+          width={160}   
+          height={140}
           className="object-contain drop-shadow-lg -mb-6"
         />
 
         <Image
-          src="burger.png"
+          src="/burger.jpg"
           alt="Burger"
           width={340}  
           height={240}
           className="object-contain drop-shadow-2xl z-10 -mb-10 md:-mb-12"
           priority
         />
+
       </div>
     </div>
   </div>
