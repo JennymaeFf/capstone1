@@ -8,7 +8,7 @@ export default function Home() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm">
         <div className="flex items-center gap-5">
           <Image
-            src="/logo.png"
+            src="logo.png"
             alt="INDABEST CRAVE CORNER Logo"
             width={100}    
             height={100}   
@@ -48,14 +48,14 @@ export default function Home() {
           <div className="md:w-1/2 flex justify-end items-end relative">
             <div className="flex items-end gap-4 md:gap-6">
               <Image
-                src="fries.png"
+                src="fries.jpg"
                 alt="Fries"
                 width={180}
                 height={160}
                 className="object-contain drop-shadow-lg -mb-4"
               />
               <Image
-                src="burger.png"
+                src="burger.jpg"
                 alt="Burger"
                 width={320}
                 height={220}
