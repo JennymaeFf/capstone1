@@ -35,10 +35,10 @@ export default function Home() {
         <button className="md:hidden text-[#5d4037] text-3xl">☰</button>
       </nav>
 
-      {/* HERO SECTION */}
+
       <section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-10 md:gap-0">
-          {/* Left: Text */}
+
           <div className="md:w-1/2 text-left">
             <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
               Enjoy rich flavor<br className="hidden md:block" /> and freshness
