@@ -10,8 +10,8 @@ export default function Home() {
           <Image
             src="logo.png"
             alt="INDABEST CRAVE CORNER Logo"
-            width={300}    
-            height={300}  
+            width={200}    
+            height={200}  
             className="object-contain"
           />
           <div>
@@ -50,8 +50,8 @@ export default function Home() {
         <Image
           src="fries.png"
           alt="Fries"
-          width={400}   
-          height={400}
+          width={350}   
+          height={350}
           className="object-contain drop-shadow-lg -mb-6"
         />
 
