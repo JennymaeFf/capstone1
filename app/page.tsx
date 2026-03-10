@@ -9,7 +9,7 @@ export default function Home() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm">
         <div className="flex items-center gap-5">
           <Image
-            src="/logo.png"  // ← IMPORTANT: with leading /
+            src="/logo.png"  
             alt="INDABEST CRAVE CORNER Logo"
             width={100}
             height={100}
@@ -50,7 +50,7 @@ export default function Home() {
           <div className="md:w-1/2 flex justify-end items-end relative overflow-hidden">
             <div className="flex items-end gap-2 md:gap-3 relative">
               <Image
-                src="fries.png"  
+                src="/fries.png"  
                 alt="Fries"
                 width={140}
                 height={120}
@@ -58,7 +58,7 @@ export default function Home() {
               />
 
               <Image
-                src="burger.png"  
+                src="/burger.png"  
                 alt="Burger"
                 width={280}
                 height={200}
