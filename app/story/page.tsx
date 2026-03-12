@@ -33,15 +33,23 @@ export default function Home() {
         </ul>
       </nav>
 
-      {/* HERO SECTION */}
-      <section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6 md:gap-10">
-          {/* Left: Text */}
-          <div className="md:w-1/2 text-left mt-4 md:mt-0">
-            <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight">
-              Enjoy rich flavor<br className="hidden md:block" /> and freshness
-            </h2>
-          </div>
+      {/* HERO / OUR STORY SECTION */}
+<section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
+  <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-20">
+    {/* Left: Text */}
+    <div className="lg:w-1/2 text-center lg:text-left">
+      <h2 className="text-4xl md:text-5xl font-bold text-[#1b5e20] mb-6 leading-tight">
+        INDABEST CRAVE CORNER
+      </h2>
+      <p className="text-lg md:text-xl leading-relaxed mb-6">
+        was born from a love for satisfying cravings. We serve creamy milk tea, juicy burgers,
+        and crispy fries, made fresh and full of flavor. Our goal is simple: to give you
+        delicious comfort food that’s always worth it.
+      </p>
+      <p className="text-lg md:text-xl leading-relaxed">
+        One stop, all cravings—only the indabest.
+      </p>
+    </div>
 
           {/* Right: Images */}
           <div className="md:w-1/2 flex justify-end items-end relative overflow-hidden">
@@ -68,15 +76,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="flex justify-center gap-6 mt-10 md:mt-12">
-          <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Discover the drinks
-          </button>
-          <button className="bg-[#f57c00] hover:bg-[#ef6c00] text-white px-10 py-4 rounded-lg font-semibold text-lg shadow-md transition">
-            Order Now
-          </button>
-        </div>
+        
       </section>
 
       {/* Footer */}
