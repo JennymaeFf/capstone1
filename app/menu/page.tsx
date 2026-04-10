@@ -16,7 +16,7 @@ export default function MenuPage() {
   const [cart, setCart] = useState<MenuItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
 
   useEffect(() => {

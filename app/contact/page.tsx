@@ -3,13 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 export default function ContactPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
-  const router = useRouter();
-
   useEffect(() => {
     setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
     setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
@@ -33,13 +30,6 @@ export default function ContactPage() {
           <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-
-          {/* CART */}
-          <li>
-            <button onClick={() => router.push("/menu")} className="relative">
-              <span className="text-2xl">🛒</span>
-            </button>
-          </li>
 
           {/* LOGIN or PROFILE */}
           {!isLoggedIn ? (
