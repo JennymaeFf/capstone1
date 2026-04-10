@@ -41,6 +41,7 @@ export default function Home() {
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
           
+          
           {!isLoggedIn ? (
             <li>
               <Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link>
