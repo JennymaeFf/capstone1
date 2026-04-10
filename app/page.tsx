@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 const bestSellers = [
   { name: "Indabest Burger", price: "P89.00", image: "/burgers.png" },
@@ -16,17 +17,39 @@ const bestSellers = [
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
+  const profileRef = useRef<HTMLLIElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
     setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    setIsLoggedIn(false);
+    setShowProfile(false);
+    router.push("/");
+  };
+
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
 
       {/* FIXED HEADER */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-md">
+      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm" style={{backdropFilter: 'none'}}>
         <div className="flex items-center gap-5">
           <Image src="/logo.png" alt="INDABEST CRAVE CORNER Logo" width={150} height={150} className="object-contain" />
           <div>
@@ -35,23 +58,46 @@ export default function Home() {
           </div>
         </div>
 
-        <ul className="hidden md:flex gap-10 text-[#5d4037] text-base font-medium items-center">
+        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
           <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
           <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-          
-          
+          {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
+
+          <li>
+            <button onClick={() => router.push("/menu")} className="relative">
+              <span className="text-2xl">🛒</span>
+            </button>
+          </li>
+
           {!isLoggedIn ? (
             <li>
               <Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link>
             </li>
           ) : (
-            <li className="flex items-center gap-2 bg-[#DDF8B1] px-4 py-2 rounded-full">
-              <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
+            <li className="relative" ref={profileRef}>
+              <button
+                onClick={() => setShowProfile(!showProfile)}
+                className="flex items-center gap-2 bg-[#DDF8B1] hover:bg-[#c5e8a0] px-4 py-2 rounded-full transition"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
+              </button>
+              {showProfile && (
+                <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
+                  <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
+                  <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
+                  >
+                    Log Out
+                  </button>
+                </div>
+              )}
             </li>
           )}
         </ul>

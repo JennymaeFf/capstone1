@@ -25,11 +25,12 @@ export default function StoryPage() {
           </div>
         </div>
 
-        <ul className="hidden md:flex gap-10 text-[#5d4037] text-base font-medium items-center">
+        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
           <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
           <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
+          {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
 
           {/* LOGIN or PROFILE */}
           {!isLoggedIn ? (

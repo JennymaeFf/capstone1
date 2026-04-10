@@ -6,6 +6,21 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 type MenuItem = { name: string; price: string; image: string; category: string };
+type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number };
+type CheckoutInfo = { name: string; phone: string; address: string; payment: string };
+
+const DRINK_CATEGORIES = ["Lemonade Series", "Float Series", "Macchiato", "Zagu Delight"];
+const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
+  "Lemonade Series":   [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }],
+  "Float Series":      [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }],
+  "Macchiato":         [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }],
+  "Zagu Delight":      [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }],
+  "Pizza":             [{ label: "Regular", extra: 0 }, { label: "Large", extra: 30 }],
+  "Siopao":            [{ label: "Regular", extra: 0 }, { label: "Large", extra: 15 }],
+  "Silog Combo Meals": [{ label: "Solo", extra: 0 }, { label: "Add Rice", extra: 15 }],
+  "Bites Express":     [{ label: "Small", extra: 0 }, { label: "Medium", extra: 15 }, { label: "Large", extra: 25 }],
+};
+const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }];
 
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -13,8 +28,12 @@ export default function MenuPage() {
   const [userName, setUserName] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [cart, setCart] = useState<MenuItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [modalQty, setModalQty] = useState(1);
+  const [modalSize, setModalSize] = useState("Small");
   const [showCart, setShowCart] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutInfo, setCheckoutInfo] = useState<CheckoutInfo>({ name: "", phone: "", address: "", payment: "Cash on Delivery" });
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
@@ -100,10 +119,41 @@ export default function MenuPage() {
     ? menuItems
     : menuItems.filter((item) => item.category === activeCategory);
 
-  const handleAddToCart = (item: MenuItem) => {
+  const hasSizes = (category: string) => category in SIZE_OPTIONS;
+  const getSizes = (category: string) => SIZE_OPTIONS[category] ?? SIZES;
+
+  const cartKey = (name: string, size?: string) => size ? `${name}__${size}` : name;
+  const getQty = (name: string, size?: string) => cart.find((c) => cartKey(c.name, c.size) === cartKey(name, size))?.quantity ?? 0;
+  const getTotalQtyByName = (name: string) => cart.filter((c) => c.name === name).reduce((s, c) => s + c.quantity, 0);
+
+  const handleAddToCart = (item: MenuItem, qty = 1, size?: string) => {
     if (!isLoggedIn) { setShowModal(true); return; }
-    setCart((prev) => [...prev, item]);
+    const basePrice = parseFloat(item.price.replace("P", ""));
+    const sizes = getSizes(item.category);
+    const sizeExtra = size ? (sizes.find((s) => s.label === size)?.extra ?? 0) : 0;
+    const finalPrice = basePrice + sizeExtra;
+    const key = cartKey(item.name, size);
+    setCart((prev) => {
+      const existing = prev.find((c) => cartKey(c.name, c.size) === key);
+      if (existing) return prev.map((c) => cartKey(c.name, c.size) === key ? { ...c, quantity: c.quantity + qty } : c);
+      return [...prev, { ...item, quantity: qty, size, finalPrice }];
+    });
   };
+
+  const handleDecrement = (name: string, size?: string) => {
+    const key = cartKey(name, size);
+    setCart((prev) => {
+      const existing = prev.find((c) => cartKey(c.name, c.size) === key);
+      if (!existing) return prev;
+      if (existing.quantity === 1) return prev.filter((c) => cartKey(c.name, c.size) !== key);
+      return prev.map((c) => cartKey(c.name, c.size) === key ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  };
+
+  const closeModal = () => { setSelectedItem(null); setModalQty(1); setModalSize(getSizes(selectedItem?.category ?? "")[0]?.label ?? "Small"); };
+
+  const totalItems = cart.reduce((sum, c) => sum + c.quantity, 0);
+  const totalPrice = cart.reduce((sum, c) => sum + c.finalPrice * c.quantity, 0);
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
@@ -117,19 +167,20 @@ export default function MenuPage() {
             <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
           </div>
         </div>
-        <ul className="hidden md:flex gap-10 text-[#5d4037] text-base font-medium items-center">
+        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
           <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
           <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
           <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
+          {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
 
           {/* CART */}
           <li>
             <button onClick={() => setShowCart(true)} className="relative">
               <span className="text-2xl">🛒</span>
-              {cart.length > 0 && (
+              {totalItems > 0 && (
                 <span className="absolute -top-2 -right-2 bg-[#f57c00] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {cart.length}
+                  {totalItems}
                 </span>
               )}
             </button>
@@ -154,6 +205,7 @@ export default function MenuPage() {
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
+                  <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
@@ -224,12 +276,27 @@ export default function MenuPage() {
               <div className="p-5 text-center">
                 <h4 className="text-lg font-semibold text-[#5d4037] mb-1">{item.name}</h4>
                 <p className="text-[#2e7d32] font-bold text-xl mb-3">{item.price}</p>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleAddToCart(item); }}
-                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
-                >
-                  Add to Cart
-                </button>
+                {DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalQty(1); setModalSize(getSizes(item.category)[0].label); }}
+                    className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
+                  >
+                    {getTotalQtyByName(item.name) > 0 ? `In Cart (${getTotalQtyByName(item.name)}) · Add More` : "Add to Cart"}
+                  </button>
+                ) : getQty(item.name) === 0 ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAddToCart(item); }}
+                    className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
+                  >
+                    Add to Cart
+                  </button>
+                ) : (
+                  <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center gap-3">
+                    <button onClick={() => handleDecrement(item.name)} className="w-8 h-8 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-lg flex items-center justify-center">−</button>
+                    <span className="text-lg font-bold text-[#1b5e20] w-6 text-center">{getQty(item.name)}</span>
+                    <button onClick={() => handleAddToCart(item)} className="w-8 h-8 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-lg flex items-center justify-center">+</button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -242,28 +309,63 @@ export default function MenuPage() {
       </footer>
 
       {/* PRODUCT DETAIL MODAL */}
-      {selectedItem && (
-        <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={() => setSelectedItem(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="relative h-64 bg-[#f8fafc]">
-              <Image src={selectedItem.image} alt={selectedItem.name} fill className="object-contain p-6" />
-              <button onClick={() => setSelectedItem(null)} className="absolute top-3 right-3 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-[#5d4037] hover:bg-[#DDF8B1] text-lg font-bold">✕</button>
-            </div>
-            <div className="p-6">
-              <span className="text-xs font-semibold text-[#4caf50] uppercase tracking-widest">{selectedItem.category}</span>
-              <h3 className="text-xl font-bold text-[#1b5e20] mt-1 mb-1">{selectedItem.name}</h3>
-              <p className="text-[#2e7d32] font-extrabold text-2xl mb-3">{selectedItem.price}</p>
-              <p className="text-sm text-[#a1887f] mb-5">Fresh and delicious {selectedItem.name} made with quality ingredients. Perfect for any craving!</p>
-              <button
-                onClick={() => { handleAddToCart(selectedItem); setSelectedItem(null); }}
-                className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
-              >
-                Add to Cart
-              </button>
+      {selectedItem && (() => {
+        const itemSizes = getSizes(selectedItem.category);
+        const hasSize = hasSizes(selectedItem.category);
+        const basePrice = parseFloat(selectedItem.price.replace("P", ""));
+        const sizeExtra = hasSize ? (itemSizes.find((s) => s.label === modalSize)?.extra ?? 0) : 0;
+        const computedPrice = basePrice + sizeExtra;
+        return (
+          <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={closeModal}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="relative h-64 bg-[#f8fafc]">
+                <Image src={selectedItem.image} alt={selectedItem.name} fill className="object-contain p-6" />
+                <button onClick={closeModal} className="absolute top-3 right-3 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-[#5d4037] hover:bg-[#DDF8B1] text-lg font-bold">✕</button>
+              </div>
+              <div className="p-6">
+                <span className="text-xs font-semibold text-[#4caf50] uppercase tracking-widest">{selectedItem.category}</span>
+                <h3 className="text-xl font-bold text-[#1b5e20] mt-1 mb-1">{selectedItem.name}</h3>
+                <p className="text-[#2e7d32] font-extrabold text-2xl mb-3">P{computedPrice.toFixed(2)}</p>
+                <p className="text-sm text-[#a1887f] mb-4">Fresh and delicious {selectedItem.name} made with quality ingredients. Perfect for any craving!</p>
+
+                {hasSize && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-[#5d4037] mb-2">Choose Size</p>
+                    <div className="flex gap-2">
+                      {itemSizes.map((s) => (
+                        <button
+                          key={s.label}
+                          onClick={() => setModalSize(s.label)}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
+                            modalSize === s.label
+                              ? "border-[#4caf50] bg-[#DDF8B1] text-[#1b5e20]"
+                              : "border-[#e0e0e0] text-[#5d4037] hover:border-[#4caf50]"
+                          }`}
+                        >
+                          {s.label}<br />
+                          <span className="font-normal text-[10px]">{s.extra === 0 ? `P${basePrice}` : `+P${s.extra}`}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-4 mb-4">
+                  <button onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-xl flex items-center justify-center">−</button>
+                  <span className="text-xl font-bold text-[#1b5e20] w-8 text-center">{modalQty}</span>
+                  <button onClick={() => setModalQty((q) => q + 1)} className="w-9 h-9 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-xl flex items-center justify-center">+</button>
+                </div>
+                <button
+                  onClick={() => { handleAddToCart(selectedItem, modalQty, hasSize ? modalSize : undefined); closeModal(); }}
+                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
+                >
+                  Add to Cart · P{(computedPrice * modalQty).toFixed(2)}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* CART MODAL */}
       {showCart && (
@@ -278,27 +380,126 @@ export default function MenuPage() {
             ) : (
               <>
                 <ul className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                  {cart.map((c, i) => (
-                    <li key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-[#ffe082]">
+                  {cart.map((c) => (
+                    <li key={cartKey(c.name, c.size)} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-[#ffe082]">
                       <div className="relative w-12 h-12 flex-shrink-0">
                         <Image src={c.image} alt={c.name} fill className="object-contain" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-[#5d4037]">{c.name}</p>
-                        <p className="text-xs text-[#2e7d32] font-bold">{c.price}</p>
+                        <p className="text-sm font-semibold text-[#5d4037]">{c.name}{c.size && <span className="ml-1 text-xs text-[#4caf50] font-bold">({c.size})</span>}</p>
+                        <p className="text-xs text-[#2e7d32] font-bold">P{(c.finalPrice * c.quantity).toFixed(2)}</p>
                       </div>
-                      <button onClick={() => setCart((prev) => prev.filter((_, idx) => idx !== i))} className="text-xs text-[#a1887f] hover:text-red-500">✕</button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleDecrement(c.name, c.size)} className="w-6 h-6 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center">−</button>
+                        <span className="text-sm font-bold text-[#1b5e20] w-5 text-center">{c.quantity}</span>
+                        <button onClick={() => handleAddToCart(c, 1, c.size)} className="w-6 h-6 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center">+</button>
+                      </div>
                     </li>
                   ))}
                 </ul>
+                <div className="flex justify-between items-center mb-3 px-1">
+                  <span className="text-xs text-[#a1887f]">Total ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
+                  <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
+                </div>
                 <button
-                  onClick={() => { alert("Order placed!"); setCart([]); setShowCart(false); }}
+                  onClick={() => { setShowCart(false); setShowCheckout(true); }}
                   className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
-                  Place Order ({cart.length} item{cart.length !== 1 ? "s" : ""})
+                  Proceed to Checkout
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* CHECKOUT MODAL */}
+      {showCheckout && (
+        <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={() => setShowCheckout(false)}>
+          <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold text-[#1b5e20]">📋 Checkout</h3>
+              <button onClick={() => setShowCheckout(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">✕</button>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Juan Dela Cruz"
+                  value={checkoutInfo.name}
+                  onChange={(e) => setCheckoutInfo((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 09XXXXXXXXX"
+                  value={checkoutInfo.phone}
+                  onChange={(e) => setCheckoutInfo((p) => ({ ...p, phone: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Delivery Address</label>
+                <textarea
+                  placeholder="e.g. Blk 1 Lot 2, Street, Barangay, City"
+                  value={checkoutInfo.address}
+                  onChange={(e) => setCheckoutInfo((p) => ({ ...p, address: e.target.value }))}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50] resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-2">Payment Method</label>
+                <div className="flex gap-2">
+                  {["Cash on Delivery", "GCash", "Maya"].map((method) => (
+                    <button
+                      key={method}
+                      onClick={() => setCheckoutInfo((p) => ({ ...p, payment: method }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
+                        checkoutInfo.payment === method
+                          ? "border-[#4caf50] bg-[#DDF8B1] text-[#1b5e20]"
+                          : "border-[#e0e0e0] text-[#5d4037] hover:border-[#4caf50]"
+                      }`}
+                    >
+                      {method === "Cash on Delivery" ? "💵 COD" : method === "GCash" ? "📱 GCash" : "💳 Maya"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-4 bg-white rounded-xl px-4 py-3 border border-[#ffe082]">
+              <span className="text-xs text-[#a1887f]">Total ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
+              <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
+            </div>
+
+            <button
+              disabled={!checkoutInfo.name || !checkoutInfo.phone || !checkoutInfo.address}
+              onClick={() => {
+                const existing = JSON.parse(localStorage.getItem("orders") || "[]");
+                const newOrder = {
+                  id: Date.now().toString().slice(-6),
+                  date: new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
+                  items: cart.map((c) => ({ name: c.name, image: c.image, quantity: c.quantity, size: c.size, finalPrice: c.finalPrice })),
+                  total: totalPrice,
+                  status: "Preparing",
+                  customer: checkoutInfo,
+                };
+                localStorage.setItem("orders", JSON.stringify([...existing, newOrder]));
+                setCart([]);
+                setShowCheckout(false);
+                setCheckoutInfo({ name: "", phone: "", address: "", payment: "Cash on Delivery" });
+                router.push("/orders");
+              }}
+              className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition"
+            >
+              Place Order · P{totalPrice.toFixed(2)}
+            </button>
           </div>
         </div>
       )}
