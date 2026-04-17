@@ -4,26 +4,26 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import SiteFooter from "@/components/site-footer";
+import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
 
 type OrderItem = { name: string; image: string; quantity: number; size?: string; finalPrice: number };
 type Order = { id: string; date: string; items: OrderItem[]; total: number; status: string; customer?: { name: string; phone: string; address: string; payment: string } };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
+  const [orders] = useState<Order[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("orders");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const { isLoggedIn, userName } = useAuthProfile();
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-    if (!loggedIn) { router.push("/login"); return; }
-    setIsLoggedIn(true);
-    setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
-    const saved = localStorage.getItem("orders");
-    setOrders(saved ? JSON.parse(saved) : []);
-  }, [router]);
+    if (!isLoggedIn) router.push("/login");
+  }, [isLoggedIn, router]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -39,7 +39,7 @@ export default function OrdersPage() {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userName");
-    setIsLoggedIn(false);
+    notifyAuthChange();
     setShowProfile(false);
     router.push("/");
   };
@@ -90,6 +90,7 @@ export default function OrdersPage() {
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
+                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
                   <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
                   <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition">Log Out</button>
                 </div>
@@ -163,9 +164,7 @@ export default function OrdersPage() {
         )}
       </main>
 
-      <footer className="bg-[#FFF6DE] border-t border-[#ffe082] py-6 text-center text-[#a1887f] text-xs">
-        EST 2024 • INDABEST CRAVE CORNER
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

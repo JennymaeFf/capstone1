@@ -4,6 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import SiteFooter from "@/components/site-footer";
+import FoodImageCarousel from "@/components/food-image-carousel";
+import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
 
 const bestSellers = [
   { name: "Indabest Burger", price: "P89.00", image: "/burgers.png" },
@@ -15,16 +18,10 @@ const bestSellers = [
 ];
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
+  const { isLoggedIn, userName } = useAuthProfile();
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
-    setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -40,7 +37,7 @@ export default function Home() {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userName");
-    setIsLoggedIn(false);
+    notifyAuthChange();
     setShowProfile(false);
     router.push("/");
   };
@@ -89,6 +86,7 @@ export default function Home() {
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
+                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
                   <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
                   <button
                     onClick={handleLogout}
@@ -105,12 +103,12 @@ export default function Home() {
 
       {/* HERO SECTION */}
       <section className="pt-32 md:pt-40 pb-20 md:pb-28 px-6 md:px-16 bg-[#DDF8B1]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-10">
-          <div className="md:w-1/2 text-left">
-            <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight mb-12">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-10">
+          <div className="md:w-1/2 text-center flex flex-col items-center md:pt-8 lg:pt-12">
+            <h2 className="text-4xl md:text-6xl font-bold text-[#1b5e20] leading-tight mb-8">
               Enjoy rich flavor<br className="hidden md:block" /> and freshness
             </h2>
-            <div className="flex flex-wrap gap-6">
+            <div className="flex flex-wrap justify-center gap-4">
               <Link href="/menu">
                 <button className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-10 py-4 rounded-xl font-semibold text-lg shadow-md transition">
                   Discover the Drinks
@@ -123,11 +121,8 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          <div className="md:w-1/2 flex justify-end">
-            <div className="flex gap-6">
-              <Image src="/fries.png" alt="Fries" width={260} height={220} className="object-contain drop-shadow-lg" />
-              <Image src="/burger.png" alt="Burger" width={300} height={240} className="object-contain drop-shadow-2xl" priority />
-            </div>
+          <div className="md:w-1/2 flex justify-center md:justify-end">
+            <FoodImageCarousel />
           </div>
         </div>
       </section>
@@ -161,10 +156,9 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-[#FFF6DE] py-8 text-center text-[#6d4c41] text-sm border-t border-[#ffe082]">
-        EST 2024 • INDABEST CRAVE CORNER
-      </footer>
+      <SiteFooter />
 
     </div>
   );
 }
+

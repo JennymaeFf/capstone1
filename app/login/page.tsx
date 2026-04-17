@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import SiteFooter from "@/components/site-footer";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const totalItems = 0;
+  const setShowCart = () => router.push("/menu");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,37 +40,37 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans flex flex-col">
 
-    {/* FIXED HEADER */}
-          <nav className="fixed top-0 left-0 right-0 z-50 bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm">
-            <div className="flex items-center gap-5">
-              <Image
-                src="/logo.png"
-                alt="INDABEST CRAVE CORNER Logo"
-                width={150}
-                height={150}
-                className="object-contain"
-              />
-              <div>
-                <h1 className="text-[#5d4037] text-2xl md:text-3xl font-bold tracking-wide">
-                  INDABEST CRAVE CORNER
-                </h1>
-                <p className="text-[#a1887f] text-sm -mt-1">
-                  We got your cravinags covered!
-                </p>
+      {/* NAV */}
+            <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm" style={{backdropFilter: 'none'}}>
+              <div className="flex items-center gap-5">
+                <Image src="/logo.png" alt="Logo" width={150} height={150} className="object-contain" />
+                <div>
+                  <h1 className="text-[#5d4037] text-lg md:text-xl font-bold tracking-wide">INDABEST CRAVE CORNER</h1>
+                  <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
+                </div>
               </div>
-            </div>
-    
-            <ul className="hidden md:flex gap-10 text-[#5d4037] text-base font-medium">
-              <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
-              <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
-              <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
-              <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-              <li><Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link></li>
-            </ul>
-          </nav>
+              <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
+                <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
+                <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
+                <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
+                <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
+      
+                {/* CART */}
+                <li>
+                  <button onClick={() => setShowCart()} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF8B1] text-[#1b5e20] transition hover:bg-[#c5e8a0]">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L23 6H6" /></svg>
+                    {totalItems > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-[#f57c00] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                        {totalItems}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              </ul>
+            </nav>
 
       {/* CONTENT */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 pt-24 pb-10">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pt-36 pb-10 md:pt-44">
         <div className="flex flex-col items-center mb-4">
           <h1 className="text-[#1b5e20] font-extrabold text-2xl mt-2 tracking-wide">INDABEST CRAVE CORNER</h1>
           <p className="text-[#5d4037] text-sm mt-1">We got your cravings covered!</p>
@@ -122,6 +125,8 @@ export default function LoginPage() {
           ← Back to Home
         </Link>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }

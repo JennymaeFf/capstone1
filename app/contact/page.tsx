@@ -2,15 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import SiteFooter from "@/components/site-footer";
+import FoodImageCarousel from "@/components/food-image-carousel";
+import { useAuthProfile } from "@/components/use-auth-profile";
 
 export default function ContactPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
-  useEffect(() => {
-    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
-    setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
-  }, []);
+  const { isLoggedIn, userName } = useAuthProfile();
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
@@ -48,45 +45,42 @@ export default function ContactPage() {
         </ul>
       </nav>
 
-      <main className="pt-32 md:pt-40 pb-20 px-6 md:px-16 bg-[#DDF8B1]">
+      <main className="bg-[#DDF8B1] px-6 pb-10 pt-28 md:px-16 md:pb-12 md:pt-32">
         <div className="max-w-7xl mx-auto">
 
-          <h1 className="text-4xl md:text-6xl font-bold text-[#1b5e20] mb-12">Get In Touch</h1>
+          <h1 className="mb-6 text-center text-4xl font-bold text-[#1b5e20] md:text-5xl lg:text-left">Get In Touch</h1>
 
-          <div className="flex flex-col md:flex-row items-start justify-between gap-10">
+          <div className="flex flex-col items-center justify-between gap-8 md:flex-row md:items-center lg:gap-10">
 
             {/* FORM */}
-            <form className="space-y-8 md:w-1/2">
+            <form className="w-full max-w-md space-y-4 md:w-1/2">
               <div className="flex flex-col">
-                <label className="font-semibold mb-2 text-lg">Name:</label>
-                <input type="text" className="w-96 h-11 border border-gray-400 bg-white px-4 rounded" />
+                <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Name:</label>
+                <input type="text" className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]" />
               </div>
               <div className="flex flex-col">
-                <label className="font-semibold mb-2 text-lg">Email:</label>
-                <input type="email" className="w-96 h-11 border border-gray-400 bg-white px-4 rounded" />
+                <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Email:</label>
+                <input type="email" className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]" />
               </div>
               <div className="flex flex-col">
-                <label className="font-semibold mb-2 text-lg">Message:</label>
-                <textarea className="w-96 h-32 border border-gray-400 bg-white px-4 py-2 rounded"></textarea>
+                <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Message:</label>
+                <textarea className="h-28 w-full resize-none rounded-lg border border-[#c8e6c9] bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]"></textarea>
               </div>
-              <button type="submit" className="bg-[#4caf50] hover:bg-[#388e3c] text-white px-8 py-3 rounded font-semibold mt-4">
+              <button type="submit" className="rounded-lg bg-[#4caf50] px-8 py-2.5 font-semibold text-white transition hover:bg-[#388e3c]">
                 Send
               </button>
             </form>
 
             {/* FOOD IMAGES */}
-            <div className="md:w-1/2 flex justify-end items-end gap-6">
-              <Image src="/fries.png" alt="Fries" width={260} height={260} className="object-contain" />
-              <Image src="/burger.png" alt="Burger" width={300} height={260} className="object-contain" />
+            <div className="flex w-full justify-center md:w-1/2 md:justify-end">
+              <FoodImageCarousel />
             </div>
 
           </div>
         </div>
       </main>
 
-      <footer className="bg-[#FFF6DE] py-6 text-center text-[#6d4c41] text-sm border-t border-[#ffe082]">
-        EST 2024 • INDABEST CRAVE CORNER
-      </footer>
+      <SiteFooter />
 
     </div>
   );

@@ -2,15 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import SiteFooter from "@/components/site-footer";
+import { useAuthProfile } from "@/components/use-auth-profile";
 
 export default function StoryPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
-  useEffect(() => {
-    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
-    setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
-  }, []);
+  const { isLoggedIn, userName } = useAuthProfile();
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
@@ -49,35 +45,41 @@ export default function StoryPage() {
       </nav>
 
       {/* OUR STORY SECTION */}
-      <section className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-16 bg-[#DDF8B1]">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-20">
-          <div className="lg:w-1/2 text-center lg:text-left">
-            <h2 className="text-4xl md:text-5xl font-bold text-[#1b5e20] mb-6 leading-tight">
-              INDABEST CRAVE CORNER
+      <section className="bg-[#DDF8B1] px-6 pb-16 pt-32 md:px-16 md:pb-24 md:pt-40">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 rounded-3xl border border-[#cdeba2] bg-[#FFF6DE]/80 p-6 shadow-lg md:p-10 lg:grid-cols-2 lg:gap-14">
+          <div className="order-2 text-center lg:order-1 lg:text-left">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.35em] text-[#4caf50]">Our Story</p>
+            <h2 className="mb-5 text-4xl font-bold leading-tight text-[#1b5e20] md:text-5xl">
+              A family working together, one craving at a time.
             </h2>
-            <p className="text-lg md:text-xl leading-relaxed mb-6">
-              was born from a love for satisfying cravings. We serve creamy milk tea, juicy burgers,
-              and crispy fries, made fresh and full of flavor. Our goal is simple: to give you
-              delicious comfort food that&apos;s always worth it.
+            <p className="mb-5 text-base leading-relaxed text-[#5d4037] md:text-lg">
+              IndaBest Crave Corner is a family-owned business built with love, teamwork, and a shared dream.
+              Every day, the family works together to prepare good food, welcome customers, and keep improving
+              the small business they are proud to call their own.
             </p>
-            <p className="text-lg md:text-xl leading-relaxed">
-              One stop, all cravings—only the indabest.
+            <p className="text-base leading-relaxed text-[#6d4c41] md:text-lg">
+              From serving refreshing drinks to favorite comfort foods, their goal is simple: to make every
+              customer feel at home and satisfied. For this family, IndaBest is more than a store. It is a
+              place where hard work, care, and community come together.
             </p>
           </div>
 
-          <div className="md:w-1/2 flex justify-end items-end relative overflow-hidden">
-            <div className="flex items-end gap-4 md:gap-6">
-              <Image src="/fries.png" alt="Fries" width={300} height={300} className="object-contain drop-shadow-lg" />
-              <Image src="/burger.png" alt="Burger" width={340} height={240} className="object-contain drop-shadow-2xl -mb-4" priority />
+          <div className="order-1 lg:order-2">
+            <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] border-8 border-white bg-[#DDF8B1] shadow-2xl">
+              <Image
+                src="/indab.png"
+                alt="Owner of IndaBest Crave Corner"
+                fill
+                className="object-cover"
+                priority
+              />
             </div>
           </div>
         </div>
       </section>
-
       {/* Footer */}
-      <footer className="bg-[#FFF6DE] py-6 text-center text-[#6d4c41] text-sm border-t border-[#ffe082]">
-        EST 2024 • INDABEST CRAVE CORNER
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
+

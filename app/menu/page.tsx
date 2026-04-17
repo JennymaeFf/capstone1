@@ -4,10 +4,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import SiteFooter from "@/components/site-footer";
+import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
 
 type MenuItem = { name: string; price: string; image: string; category: string };
 type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number };
-type CheckoutInfo = { name: string; phone: string; address: string; payment: string };
+type CheckoutInfo = { name: string; email: string; phone: string; address: string; payment: string };
+
+const DEFAULT_CHECKOUT_INFO: CheckoutInfo = {
+  name: "",
+  email: "",
+  phone: "",
+  address: "",
+  payment: "Cash on Delivery",
+};
 
 const DRINK_CATEGORIES = ["Lemonade Series", "Float Series", "Macchiato", "Zagu Delight"];
 const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
@@ -24,8 +34,7 @@ const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { l
 
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
+  const { isLoggedIn, userName } = useAuthProfile();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -33,15 +42,10 @@ export default function MenuPage() {
   const [modalSize, setModalSize] = useState("Small");
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [checkoutInfo, setCheckoutInfo] = useState<CheckoutInfo>({ name: "", phone: "", address: "", payment: "Cash on Delivery" });
+  const [checkoutInfo, setCheckoutInfo] = useState<CheckoutInfo>(DEFAULT_CHECKOUT_INFO);
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
-    setUserName(localStorage.getItem("userName") || localStorage.getItem("userEmail") || "");
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -57,9 +61,29 @@ export default function MenuPage() {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userName");
-    setIsLoggedIn(false);
+    notifyAuthChange();
     setShowProfile(false);
     router.push("/");
+  };
+
+  const getSavedCheckoutInfo = (): CheckoutInfo => {
+    const savedInfo = JSON.parse(localStorage.getItem("checkoutInfo") || "{}") as Partial<CheckoutInfo>;
+    const orders = JSON.parse(localStorage.getItem("orders") || "[]") as { customer?: Partial<CheckoutInfo> }[];
+    const lastCustomer = [...orders].reverse().find((order) => order.customer)?.customer ?? {};
+
+    return {
+      name: localStorage.getItem("userName") || savedInfo.name || lastCustomer.name || "",
+      email: localStorage.getItem("userEmail") || savedInfo.email || lastCustomer.email || "",
+      phone: savedInfo.phone || lastCustomer.phone || "",
+      address: savedInfo.address || lastCustomer.address || "",
+      payment: savedInfo.payment || lastCustomer.payment || "Cash on Delivery",
+    };
+  };
+
+  const openCheckout = () => {
+    setCheckoutInfo(getSavedCheckoutInfo());
+    setShowCart(false);
+    setShowCheckout(true);
   };
 
   const categories = [
@@ -152,6 +176,24 @@ export default function MenuPage() {
 
   const closeModal = () => { setSelectedItem(null); setModalQty(1); setModalSize(getSizes(selectedItem?.category ?? "")[0]?.label ?? "Small"); };
 
+  const handlePlaceOrder = () => {
+    const existing = JSON.parse(localStorage.getItem("orders") || "[]");
+    const newOrder = {
+      id: crypto.randomUUID().slice(-12),
+      date: new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
+      items: cart.map((c) => ({ name: c.name, image: c.image, quantity: c.quantity, size: c.size, finalPrice: c.finalPrice })),
+      total: totalPrice,
+      status: "Preparing",
+      customer: checkoutInfo,
+    };
+    localStorage.setItem("checkoutInfo", JSON.stringify(checkoutInfo));
+    localStorage.setItem("orders", JSON.stringify([...existing, newOrder]));
+    setCart([]);
+    setShowCheckout(false);
+    setCheckoutInfo(getSavedCheckoutInfo());
+    router.push("/orders");
+  };
+
   const totalItems = cart.reduce((sum, c) => sum + c.quantity, 0);
   const totalPrice = cart.reduce((sum, c) => sum + c.finalPrice * c.quantity, 0);
 
@@ -205,6 +247,7 @@ export default function MenuPage() {
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
+                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
                   <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
                   <button
                     onClick={handleLogout}
@@ -220,51 +263,50 @@ export default function MenuPage() {
       </nav>
 
       {/* HEADER */}
-      <section className="bg-[#DDF8B1] pt-32 md:pt-40 pb-6 text-center px-6">
-        <h2 className="text-4xl md:text-5xl font-bold text-[#1b5e20] mb-2">OUR MENU</h2>
-        <p className="text-base text-[#2e7d32] max-w-2xl mx-auto">
+      <section className="bg-[#DDF8B1] pt-32 md:pt-40 pb-6 px-6">
+        <div className="max-w-7xl mx-auto text-center">
+          <h2 className="text-4xl md:text-5xl font-bold text-[#1b5e20] mb-2">OUR MENU</h2>
+          <p className="text-base text-[#2e7d32] max-w-2xl mx-auto">
           Our crowd favorites – fresh, delicious, and always satisfying!
-        </p>
+          </p>
+          <div className="mt-8 bg-[#FFF6DE] border border-[#ffe082] shadow-sm rounded-2xl p-4">
+            <div className="flex flex-wrap justify-center gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActiveCategory(cat.label)}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm font-semibold whitespace-nowrap rounded-xl transition-all duration-200 border ${
+                    activeCategory === cat.label
+                      ? "bg-[#DDF8B1] border-[#4caf50] text-[#1b5e20]"
+                      : "bg-white border-transparent text-[#5d4037] hover:text-[#1b5e20] hover:border-[#4caf50]"
+                  }`}
+                >
+                  <span>{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* CATEGORIES */}
-      <div className="bg-[#FFF6DE] border-y border-[#ffe082] shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 overflow-x-auto">
-          <div className="flex justify-center gap-1">
-            {categories.map((cat) => (
-              <button
-                key={cat.label}
-                onClick={() => setActiveCategory(cat.label)}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold whitespace-nowrap transition-all duration-200 border-b-2 ${
-                  activeCategory === cat.label
-                    ? "border-[#1b5e20] text-[#1b5e20]"
-                    : "border-transparent text-[#5d4037] hover:text-[#1b5e20] hover:border-[#4caf50]"
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* MENU GRID */}
+      {/* MENU LAYOUT */}
       <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-[#1b5e20]">{activeCategory}</h3>
-            <p className="text-xs text-[#a1887f]">{filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""} available</p>
+          <section className="min-w-0">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-[#1b5e20]">{activeCategory}</h3>
+              <p className="text-xs text-[#a1887f]">{filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""} available</p>
+            </div>
+            {!isLoggedIn && (
+              <p className="text-xs text-[#a1887f] hidden md:block">
+                Log in: <Link href="/login" className="text-[#4caf50] font-semibold hover:underline">Log in</Link> to place an order
+              </p>
+            )}
           </div>
-          {!isLoggedIn && (
-            <p className="text-xs text-[#a1887f] hidden md:block">
-              🔒 <Link href="/login" className="text-[#4caf50] font-semibold hover:underline">Log in</Link> to place an order
-            </p>
-          )}
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredItems.map((item, index) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+            {filteredItems.map((item, index) => (
             <div
               key={index}
               className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
@@ -301,12 +343,11 @@ export default function MenuPage() {
             </div>
           ))}
         </div>
+          </section>
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-[#FFF6DE] border-t border-[#ffe082] py-6 text-center text-[#a1887f] text-xs">
-        EST 2024 • INDABEST CRAVE CORNER
-      </footer>
+      <SiteFooter />
 
       {/* PRODUCT DETAIL MODAL */}
       {selectedItem && (() => {
@@ -402,7 +443,7 @@ export default function MenuPage() {
                   <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
                 </div>
                 <button
-                  onClick={() => { setShowCart(false); setShowCheckout(true); }}
+                  onClick={openCheckout}
                   className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
                   Proceed to Checkout
@@ -422,29 +463,45 @@ export default function MenuPage() {
               <button onClick={() => setShowCheckout(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">✕</button>
             </div>
 
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={checkoutInfo.name}
-                  onChange={(e) => setCheckoutInfo((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
-                />
+            <div className="space-y-4 mb-4">
+              <div className="rounded-xl bg-white/70 border border-[#ffe082] p-3">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#4caf50] mb-3">Saved Customer Info</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-[#5d4037] block mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Juan Dela Cruz"
+                      value={checkoutInfo.name}
+                      readOnly
+                      className="w-full px-3 py-2 bg-[#f8fafc] border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#5d4037] block mb-1">Email</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. customer@email.com"
+                      value={checkoutInfo.email}
+                      readOnly
+                      className="w-full px-3 py-2 bg-[#f8fafc] border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#5d4037] block mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. 09XXXXXXXXX"
+                      value={checkoutInfo.phone}
+                      onChange={(e) => setCheckoutInfo((p) => ({ ...p, phone: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                    />
+                  </div>
+                </div>
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  placeholder="e.g. 09XXXXXXXXX"
-                  value={checkoutInfo.phone}
-                  onChange={(e) => setCheckoutInfo((p) => ({ ...p, phone: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Delivery Address</label>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-1">Delivery Location</label>
                 <textarea
                   placeholder="e.g. Blk 1 Lot 2, Street, Barangay, City"
                   value={checkoutInfo.address}
@@ -466,7 +523,7 @@ export default function MenuPage() {
                           : "border-[#e0e0e0] text-[#5d4037] hover:border-[#4caf50]"
                       }`}
                     >
-                      {method === "Cash on Delivery" ? "💵 COD" : method === "GCash" ? "📱 GCash" : "💳 Maya"}
+                      {method === "Cash on Delivery" ? "COD" : method}
                     </button>
                   ))}
                 </div>
@@ -480,22 +537,7 @@ export default function MenuPage() {
 
             <button
               disabled={!checkoutInfo.name || !checkoutInfo.phone || !checkoutInfo.address}
-              onClick={() => {
-                const existing = JSON.parse(localStorage.getItem("orders") || "[]");
-                const newOrder = {
-                  id: Date.now().toString().slice(-6),
-                  date: new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
-                  items: cart.map((c) => ({ name: c.name, image: c.image, quantity: c.quantity, size: c.size, finalPrice: c.finalPrice })),
-                  total: totalPrice,
-                  status: "Preparing",
-                  customer: checkoutInfo,
-                };
-                localStorage.setItem("orders", JSON.stringify([...existing, newOrder]));
-                setCart([]);
-                setShowCheckout(false);
-                setCheckoutInfo({ name: "", phone: "", address: "", payment: "Cash on Delivery" });
-                router.push("/orders");
-              }}
+              onClick={handlePlaceOrder}
               className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition"
             >
               Place Order · P{totalPrice.toFixed(2)}
@@ -523,3 +565,4 @@ export default function MenuPage() {
     </div>
   );
 }
+
