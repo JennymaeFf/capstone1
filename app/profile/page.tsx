@@ -62,6 +62,14 @@ export default function ProfilePage() {
     window.setTimeout(() => setSaved(false), 1800);
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    router.push("/orders");
+  };
+
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
       <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm" style={{backdropFilter: "none"}}>
@@ -84,6 +92,15 @@ export default function ProfilePage() {
 
       <main className="px-6 pt-32 pb-12 md:px-16 md:pt-40">
         <div className="mx-auto max-w-3xl rounded-3xl border border-[#ffe082] bg-[#FFF6DE] p-6 shadow-lg md:p-8">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="mb-5 inline-flex items-center gap-2 rounded-xl border border-[#c8e6c9] bg-white px-4 py-2 text-sm font-semibold text-[#1b5e20] transition hover:bg-[#f1f8e9] focus:outline-none focus:ring-2 focus:ring-[#4caf50] focus:ring-offset-2 focus:ring-offset-[#FFF6DE]"
+          >
+            <span aria-hidden="true">←</span>
+            Back
+          </button>
+
           <div className="mb-6 text-center">
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#4caf50]">Profile</p>
             <h2 className="mt-2 text-3xl font-bold text-[#1b5e20] md:text-4xl">Your Personal Information</h2>
