@@ -1,15 +1,28 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
-import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
+import MessageNotificationBadge from "@/components/message-notification-badge";
+import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
+import { createOrder, getAvailableMenuItems, getMyProfile, getStoreStatus, uploadPaymentProof, type MenuAddonOption, type StoreStatus } from "@/lib/supabase/data";
 
-type MenuItem = { name: string; price: string; image: string; category: string };
-type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number };
-type CheckoutInfo = { name: string; email: string; phone: string; address: string; payment: string };
+type MenuItem = { id: string; name: string; price: string; basePrice: number; image: string; category: string; isAvailable: boolean; addons?: MenuAddonOption[] };
+type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number; addons?: MenuAddonOption[] };
+type CheckoutInfo = {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  payment: string;
+  selectedBank?: string;
+  paymentReference?: string;
+  paymentProofUrl?: string;
+  deliveryOption?: string;
+  deliveryFee?: number;
+};
 
 const DEFAULT_CHECKOUT_INFO: CheckoutInfo = {
   name: "",
@@ -17,7 +30,21 @@ const DEFAULT_CHECKOUT_INFO: CheckoutInfo = {
   phone: "",
   address: "",
   payment: "Cash on Delivery",
+  selectedBank: "",
+  paymentReference: "",
+  paymentProofUrl: "",
+  deliveryOption: "Delivery",
+  deliveryFee: 20,
 };
+
+const GCASH_NUMBER = "09486123571";
+const GCASH_ACCOUNT_NAME = "JE**Y M** F.";
+const BANK_ACCOUNTS: Record<string, string> = {
+  Landbank: "2368-1174-9943",
+  BDO: "8734-0098-6783",
+  BPI: "9879-0098-2351",
+};
+const DELIVERY_BASE_FEE = 20;
 
 const DRINK_CATEGORIES = ["Lemonade Series", "Float Series", "Macchiato", "Zagu Delight"];
 const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
@@ -34,7 +61,7 @@ const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { l
 
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
-  const { isLoggedIn, userName } = useAuthProfile();
+  const { isLoggedIn, userId, userName, userEmail } = useAuthProfile();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -43,6 +70,13 @@ export default function MenuPage() {
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutInfo, setCheckoutInfo] = useState<CheckoutInfo>(DEFAULT_CHECKOUT_INFO);
+  const [profileCheckoutInfo, setProfileCheckoutInfo] = useState<CheckoutInfo>(DEFAULT_CHECKOUT_INFO);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuError, setMenuError] = useState("");
+  const [paymentProofError, setPaymentProofError] = useState("");
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "We are open and accepting orders." });
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
@@ -57,30 +91,93 @@ export default function MenuPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userName");
-    notifyAuthChange();
+  useEffect(() => {
+    const loadMenu = async () => {
+      try {
+        setMenuError("");
+        const items = await getAvailableMenuItems();
+        setMenuItems(items);
+      } catch (err) {
+        setMenuError(err instanceof Error ? err.message : "Unable to load menu items.");
+      }
+
+      try {
+        const status = await getStoreStatus();
+        setStoreStatus(status);
+      } catch (err) {
+        console.warn("[menu] Unable to load store status.", err);
+      }
+    };
+
+    void loadMenu();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getMyProfile();
+        setProfileCheckoutInfo({
+          name: profile?.full_name || userName || "",
+          email: userEmail || "",
+          phone: profile?.phone || "",
+          address: profile?.address || "",
+          payment: "Cash on Delivery",
+          selectedBank: "",
+          paymentReference: "",
+          paymentProofUrl: "",
+          deliveryOption: "Delivery",
+          deliveryFee: 20,
+        });
+      } catch {
+        setProfileCheckoutInfo({
+          name: userName || "",
+          email: userEmail || "",
+          phone: "",
+          address: "",
+          payment: "Cash on Delivery",
+          selectedBank: "",
+          paymentReference: "",
+          paymentProofUrl: "",
+          deliveryOption: "Delivery",
+          deliveryFee: 20,
+        });
+      }
+    };
+
+    void loadProfile();
+  }, [isLoggedIn, userName, userEmail]);
+
+  const handleLogout = async () => {
+    await signOutUser();
+    localStorage.removeItem("checkoutInfo");
     setShowProfile(false);
     router.push("/");
   };
 
   const getSavedCheckoutInfo = (): CheckoutInfo => {
     const savedInfo = JSON.parse(localStorage.getItem("checkoutInfo") || "{}") as Partial<CheckoutInfo>;
-    const orders = JSON.parse(localStorage.getItem("orders") || "[]") as { customer?: Partial<CheckoutInfo> }[];
-    const lastCustomer = [...orders].reverse().find((order) => order.customer)?.customer ?? {};
 
     return {
-      name: localStorage.getItem("userName") || savedInfo.name || lastCustomer.name || "",
-      email: localStorage.getItem("userEmail") || savedInfo.email || lastCustomer.email || "",
-      phone: savedInfo.phone || lastCustomer.phone || "",
-      address: savedInfo.address || lastCustomer.address || "",
-      payment: savedInfo.payment || lastCustomer.payment || "Cash on Delivery",
+      name: profileCheckoutInfo.name,
+      email: profileCheckoutInfo.email,
+      phone: profileCheckoutInfo.phone || savedInfo.phone || "",
+      address: profileCheckoutInfo.address || savedInfo.address || "",
+      payment: savedInfo.payment || "Cash on Delivery",
+      selectedBank: savedInfo.selectedBank || "",
+      paymentReference: "",
+      paymentProofUrl: "",
+      deliveryOption: savedInfo.deliveryOption || "Delivery",
+      deliveryFee: Number(savedInfo.deliveryFee ?? 20),
     };
   };
 
   const openCheckout = () => {
+    if (!storeStatus.isOpen) {
+      setMenuError(storeStatus.message || "Store is closed right now.");
+      return;
+    }
     setCheckoutInfo(getSavedCheckoutInfo());
     setShowCart(false);
     setShowCheckout(true);
@@ -89,54 +186,15 @@ export default function MenuPage() {
   const categories = [
     { label: "All", icon: "🍽️" },
     { label: "Lemonade Series", icon: "🍋" },
-    { label: "Float Series", icon: "🧋" },
+    { label: "Float Series", icon: "🥤" },
     { label: "Macchiato", icon: "☕" },
-    { label: "Zagu Delight", icon: "🥤" },
+    { label: "Zagu Delight", icon: "🧋" },
     { label: "Pizza", icon: "🍕" },
     { label: "Silog Combo Meals", icon: "🍳" },
     { label: "Bites Express", icon: "🍢" },
     { label: "Extras", icon: "🍜" },
     { label: "Siopao", icon: "🥟" },
     { label: "Beers", icon: "🍺" },
-  ];
-
-  const menuItems: MenuItem[] = [
-    { name: "Blueberry Lemonade", price: "P39.00", image: "/blueberry.png", category: "Lemonade Series" },
-    { name: "Green Apple Lemonade", price: "P39.00", image: "/greenapple.png", category: "Lemonade Series" },
-    { name: "Yakult Lemonade", price: "P39.00", image: "/yakult.png", category: "Lemonade Series" },
-    { name: "Strawberry Lemonade", price: "P39.00", image: "/strawberry.png", category: "Lemonade Series" },
-    { name: "Blueberry Float", price: "P49.00", image: "/blueberryfloat.png", category: "Float Series" },
-    { name: "Strawberry Float", price: "P49.00", image: "/strawberryfloat.png", category: "Float Series" },
-    { name: "Green Apple Float", price: "P49.00", image: "/greenapplefloat.png", category: "Float Series" },
-    { name: "Coke Float", price: "P49.00", image: "/cokefloat.png", category: "Float Series" },
-    { name: "Sprite Float", price: "P49.00", image: "/spritefloat.png", category: "Float Series" },
-    { name: "Macchiato Caramel", price: "P39.00", image: "/macchiatocaramel.png", category: "Macchiato" },
-    { name: "Macchiato Dark Chocolate", price: "P39.00", image: "/macchiatodarkchoco.png", category: "Macchiato" },
-    { name: "Macchiato Strawberry", price: "P39.00", image: "/macchiatostrawberry.png", category: "Macchiato" },
-    { name: "Ube Zagu Shake", price: "P39.00", image: "/ubeshake.png", category: "Zagu Delight" },
-    { name: "Mango Zagu Shake", price: "P39.00", image: "/mangoshake.png", category: "Zagu Delight" },
-    { name: "Hawaiian Pizza", price: "P120.00", image: "/hawaiianpizza.png", category: "Pizza" },
-    { name: "Pepperoni Pizza", price: "P120.00", image: "/pepperoni.png", category: "Pizza" },
-    { name: "Fish Ball", price: "P20.00", image: "/fishball.png", category: "Bites Express" },
-    { name: "Tempura", price: "P20.00", image: "/tempura.png", category: "Bites Express" },
-    { name: "Indabest Fries", price: "P30.00", image: "/frenchfries.png", category: "Bites Express" },
-    { name: "Japanese Siomai", price: "P9.00", image: "/japanesesiomai.png", category: "Extras" },
-    { name: "Ngohiong", price: "P15.00", image: "/ngohiong.png", category: "Extras" },
-    { name: "Regular Siomai", price: "P15.00", image: "/regularsiomai.png", category: "Extras" },
-    { name: "Corn Silog", price: "P49.00", image: "/cornsilog.png", category: "Silog Combo Meals" },
-    { name: "Ham Silog", price: "P49.00", image: "/hamsilog.png", category: "Silog Combo Meals" },
-    { name: "Hot Silog", price: "P49.00", image: "/hotsilog.png", category: "Silog Combo Meals" },
-    { name: "Long Silog", price: "P49.00", image: "/longsilog.png", category: "Silog Combo Meals" },
-    { name: "Lumpia Silog", price: "P49.00", image: "/lumpiasilog.png", category: "Silog Combo Meals" },
-    { name: "Luncheon Silog", price: "P49.00", image: "/luncheonsilog.png", category: "Silog Combo Meals" },
-    { name: "Pancit Canton", price: "P25.00", image: "/pancitcanton.png", category: "Extras" },
-    { name: "Noodles", price: "P35.00", image: "/noodles.png", category: "Extras" },
-    { name: "Cup Noodles", price: "P45.00", image: "/cupnoodles.png", category: "Extras" },
-    { name: "Asado Siopao", price: "P45.00", image: "/asado.png", category: "Siopao" },
-    { name: "Bola-Bola Siopao", price: "P45.00", image: "/bolabola.png", category: "Siopao" },
-    { name: "Red Horse Beer", price: "P130.00", image: "/redhorse.png", category: "Beers" },
-    { name: "Smirnoff", price: "P90.00", image: "/smirnoff.png", category: "Beers" },
-    { name: "Tanduay Ice", price: "P70.00", image: "/tanduayice.png", category: "Beers" },
   ];
 
   const filteredItems = activeCategory === "All"
@@ -152,6 +210,8 @@ export default function MenuPage() {
 
   const handleAddToCart = (item: MenuItem, qty = 1, size?: string) => {
     if (!isLoggedIn) { setShowModal(true); return; }
+    if (!storeStatus.isOpen) { setMenuError(storeStatus.message || "Store is closed right now."); return; }
+    if (!item.isAvailable) return;
     const basePrice = parseFloat(item.price.replace("P", ""));
     const sizes = getSizes(item.category);
     const sizeExtra = size ? (sizes.find((s) => s.label === size)?.extra ?? 0) : 0;
@@ -176,26 +236,53 @@ export default function MenuPage() {
 
   const closeModal = () => { setSelectedItem(null); setModalQty(1); setModalSize(getSizes(selectedItem?.category ?? "")[0]?.label ?? "Small"); };
 
-  const handlePlaceOrder = () => {
-    const existing = JSON.parse(localStorage.getItem("orders") || "[]");
-    const newOrder = {
-      id: crypto.randomUUID().slice(-12),
-      date: new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
-      items: cart.map((c) => ({ name: c.name, image: c.image, quantity: c.quantity, size: c.size, finalPrice: c.finalPrice })),
-      total: totalPrice,
-      status: "Preparing",
-      customer: checkoutInfo,
-    };
-    localStorage.setItem("checkoutInfo", JSON.stringify(checkoutInfo));
-    localStorage.setItem("orders", JSON.stringify([...existing, newOrder]));
-    setCart([]);
-    setShowCheckout(false);
-    setCheckoutInfo(getSavedCheckoutInfo());
-    router.push("/orders");
+  const handlePlaceOrder = async () => {
+    setIsPlacingOrder(true);
+    setMenuError("");
+
+    try {
+      await createOrder({ checkoutInfo, cart, totalPrice: subtotalPrice });
+      localStorage.setItem("checkoutInfo", JSON.stringify(checkoutInfo));
+      setCart([]);
+      setShowCheckout(false);
+      setCheckoutInfo(getSavedCheckoutInfo());
+      router.push("/orders");
+    } catch (err) {
+      setMenuError(err instanceof Error ? err.message : "Unable to place order.");
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
+
+  const handlePaymentProofUpload = async (file: File | undefined) => {
+    if (!file) return;
+
+    try {
+      setMenuError("");
+      setPaymentProofError("");
+      setIsUploadingPaymentProof(true);
+      const proofUrl = await uploadPaymentProof(file);
+      setCheckoutInfo((previous) => ({ ...previous, paymentProofUrl: proofUrl }));
+    } catch (err) {
+      setPaymentProofError(err instanceof Error ? err.message : "Unable to upload payment proof.");
+    } finally {
+      setIsUploadingPaymentProof(false);
+    }
   };
 
   const totalItems = cart.reduce((sum, c) => sum + c.quantity, 0);
-  const totalPrice = cart.reduce((sum, c) => sum + c.finalPrice * c.quantity, 0);
+  const subtotalPrice = cart.reduce((sum, c) => sum + c.finalPrice * c.quantity, 0);
+  const deliveryFee = checkoutInfo.deliveryOption === "Pickup" ? 0 : Number(checkoutInfo.deliveryFee ?? 0);
+  const totalPrice = subtotalPrice + deliveryFee;
+  const checkoutMissingReason =
+    !checkoutInfo.name ? "Your profile name is missing." :
+    !checkoutInfo.phone ? "Please enter your phone number." :
+    checkoutInfo.deliveryOption !== "Pickup" && !checkoutInfo.address ? "Please enter your delivery address." :
+    checkoutInfo.payment === "GCash" && !checkoutInfo.paymentReference ? "Please enter your GCash reference number." :
+    checkoutInfo.payment === "Card/Bank" && !checkoutInfo.selectedBank ? "Please select a bank." :
+    checkoutInfo.payment === "Card/Bank" && !checkoutInfo.paymentReference ? "Please enter your bank transaction reference number." :
+    ["GCash", "Card/Bank"].includes(checkoutInfo.payment) && !checkoutInfo.paymentProofUrl ? "Please upload your payment proof." :
+    "";
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
@@ -249,6 +336,10 @@ export default function MenuPage() {
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
                   <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
                   <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
+                  <Link href="/messages" className="flex items-center px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">
+                    Messages
+                    <MessageNotificationBadge userId={userId} />
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
@@ -267,7 +358,7 @@ export default function MenuPage() {
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-[#1b5e20] mb-2">OUR MENU</h2>
           <p className="text-base text-[#2e7d32] max-w-2xl mx-auto">
-          Our crowd favorites – fresh, delicious, and always satisfying!
+          Our crowd favorites - fresh, delicious, and always satisfying!
           </p>
           <div className="mt-8 bg-[#FFF6DE] border border-[#ffe082] shadow-sm rounded-2xl p-4">
             <div className="flex flex-wrap justify-center gap-2">
@@ -293,6 +384,9 @@ export default function MenuPage() {
       {/* MENU LAYOUT */}
       <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
           <section className="min-w-0">
+          <div className={`mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${storeStatus.isOpen ? "border-[#c8e6c9] bg-white text-[#1b5e20]" : "border-red-200 bg-red-50 text-red-600"}`}>
+            {storeStatus.message}
+          </div>
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-bold text-[#1b5e20]">{activeCategory}</h3>
@@ -304,13 +398,16 @@ export default function MenuPage() {
               </p>
             )}
           </div>
+          {menuError && (
+            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{menuError}</p>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
             {filteredItems.map((item, index) => (
             <div
-              key={index}
-              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-              onClick={() => setSelectedItem(item)}
+              key={item.id || index}
+              className={`bg-white rounded-xl shadow-lg overflow-hidden transition-shadow ${item.isAvailable ? "hover:shadow-xl cursor-pointer" : "opacity-60"}`}
+              onClick={() => item.isAvailable && setSelectedItem(item)}
             >
               <div className="relative h-56 bg-[#f8fafc] overflow-hidden">
                 <Image src={item.image} alt={item.name} fill className="object-contain p-4 hover:scale-105 transition-transform duration-300" />
@@ -318,12 +415,16 @@ export default function MenuPage() {
               <div className="p-5 text-center">
                 <h4 className="text-lg font-semibold text-[#5d4037] mb-1">{item.name}</h4>
                 <p className="text-[#2e7d32] font-bold text-xl mb-3">{item.price}</p>
-                {DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) ? (
+                {!item.isAvailable ? (
+                  <button disabled className="w-full bg-gray-300 text-gray-600 font-semibold py-2 rounded-lg text-sm">
+                    Unavailable
+                  </button>
+                ) : DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalQty(1); setModalSize(getSizes(item.category)[0].label); }}
+                    onClick={(e) => { e.stopPropagation(); if (!storeStatus.isOpen) { setMenuError(storeStatus.message || "Store is closed right now."); return; } setSelectedItem(item); setModalQty(1); setModalSize(getSizes(item.category)[0].label); }}
                     className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
                   >
-                    {getTotalQtyByName(item.name) > 0 ? `In Cart (${getTotalQtyByName(item.name)}) · Add More` : "Add to Cart"}
+                    {getTotalQtyByName(item.name) > 0 ? `In Cart (${getTotalQtyByName(item.name)}) - Add More` : "Add to Cart"}
                   </button>
                 ) : getQty(item.name) === 0 ? (
                   <button
@@ -334,7 +435,7 @@ export default function MenuPage() {
                   </button>
                 ) : (
                   <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center gap-3">
-                    <button onClick={() => handleDecrement(item.name)} className="w-8 h-8 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-lg flex items-center justify-center">−</button>
+                    <button onClick={() => handleDecrement(item.name)} className="w-8 h-8 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-lg flex items-center justify-center">-</button>
                     <span className="text-lg font-bold text-[#1b5e20] w-6 text-center">{getQty(item.name)}</span>
                     <button onClick={() => handleAddToCart(item)} className="w-8 h-8 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-lg flex items-center justify-center">+</button>
                   </div>
@@ -361,7 +462,7 @@ export default function MenuPage() {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="relative h-64 bg-[#f8fafc]">
                 <Image src={selectedItem.image} alt={selectedItem.name} fill className="object-contain p-6" />
-                <button onClick={closeModal} className="absolute top-3 right-3 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-[#5d4037] hover:bg-[#DDF8B1] text-lg font-bold">✕</button>
+                <button onClick={closeModal} className="absolute top-3 right-3 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-[#5d4037] hover:bg-[#DDF8B1] text-lg font-bold">x</button>
               </div>
               <div className="p-6">
                 <span className="text-xs font-semibold text-[#4caf50] uppercase tracking-widest">{selectedItem.category}</span>
@@ -392,15 +493,16 @@ export default function MenuPage() {
                 )}
 
                 <div className="flex items-center justify-center gap-4 mb-4">
-                  <button onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-xl flex items-center justify-center">−</button>
+                  <button onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-xl flex items-center justify-center">-</button>
                   <span className="text-xl font-bold text-[#1b5e20] w-8 text-center">{modalQty}</span>
                   <button onClick={() => setModalQty((q) => q + 1)} className="w-9 h-9 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-xl flex items-center justify-center">+</button>
                 </div>
                 <button
                   onClick={() => { handleAddToCart(selectedItem, modalQty, hasSize ? modalSize : undefined); closeModal(); }}
-                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
+                  disabled={!storeStatus.isOpen}
+                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
-                  Add to Cart · P{(computedPrice * modalQty).toFixed(2)}
+                  Add to Cart - P{(computedPrice * modalQty).toFixed(2)}
                 </button>
               </div>
             </div>
@@ -411,10 +513,10 @@ export default function MenuPage() {
       {/* CART MODAL */}
       {showCart && (
         <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={() => setShowCart(false)}>
-          <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-[#1b5e20]">🛒 Your Cart</h3>
-              <button onClick={() => setShowCart(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">✕</button>
+              <h3 className="text-base font-bold text-[#1b5e20]">Your Cart</h3>
+              <button onClick={() => setShowCart(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">x</button>
             </div>
             {cart.length === 0 ? (
               <p className="text-xs text-[#a1887f] text-center py-6">Your cart is empty.</p>
@@ -431,7 +533,7 @@ export default function MenuPage() {
                         <p className="text-xs text-[#2e7d32] font-bold">P{(c.finalPrice * c.quantity).toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleDecrement(c.name, c.size)} className="w-6 h-6 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center">−</button>
+                        <button onClick={() => handleDecrement(c.name, c.size)} className="w-6 h-6 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center">-</button>
                         <span className="text-sm font-bold text-[#1b5e20] w-5 text-center">{c.quantity}</span>
                         <button onClick={() => handleAddToCart(c, 1, c.size)} className="w-6 h-6 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center">+</button>
                       </div>
@@ -440,13 +542,14 @@ export default function MenuPage() {
                 </ul>
                 <div className="flex justify-between items-center mb-3 px-1">
                   <span className="text-xs text-[#a1887f]">Total ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
-                  <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-[#1b5e20]">P{subtotalPrice.toFixed(2)}</span>
                 </div>
                 <button
                   onClick={openCheckout}
-                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2.5 rounded-xl text-sm transition"
+                  disabled={!storeStatus.isOpen}
+                  className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
-                  Proceed to Checkout
+                  {storeStatus.isOpen ? "Proceed to Checkout" : "Store Closed"}
                 </button>
               </>
             )}
@@ -456,12 +559,15 @@ export default function MenuPage() {
 
       {/* CHECKOUT MODAL */}
       {showCheckout && (
-        <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={() => setShowCheckout(false)}>
-          <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-[#1b5e20]">📋 Checkout</h3>
-              <button onClick={() => setShowCheckout(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">✕</button>
+        <div className="fixed inset-0 z-[150] bg-black/50 flex items-start justify-center overflow-y-auto px-4 py-5 md:py-8" onClick={() => setShowCheckout(false)}>
+          <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2.5rem)] md:max-h-[calc(100vh-4rem)] overflow-y-auto p-5 md:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky -top-5 md:-top-6 z-10 flex justify-between items-center mb-4 bg-[#FFF6DE] border-b border-[#ffe082] py-3">
+              <h3 className="text-base font-bold text-[#1b5e20]">Checkout</h3>
+              <button onClick={() => setShowCheckout(false)} className="text-[#a1887f] hover:text-[#5d4037] text-lg font-bold">x</button>
             </div>
+            {menuError && (
+              <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{menuError}</p>
+            )}
 
             <div className="space-y-4 mb-4">
               <div className="rounded-xl bg-white/70 border border-[#ffe082] p-3">
@@ -511,12 +617,37 @@ export default function MenuPage() {
                 />
               </div>
               <div>
+                <label className="text-xs font-semibold text-[#5d4037] block mb-2">Delivery Option</label>
+                <div className="flex gap-2">
+                  {["Delivery", "Pickup"].map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setCheckoutInfo((p) => ({
+                        ...p,
+                        deliveryOption: option,
+                        deliveryFee: option === "Pickup" ? 0 : DELIVERY_BASE_FEE,
+                      }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
+                        checkoutInfo.deliveryOption === option
+                          ? "border-[#4caf50] bg-[#DDF8B1] text-[#1b5e20]"
+                          : "border-[#e0e0e0] text-[#5d4037] hover:border-[#4caf50]"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {checkoutInfo.deliveryOption !== "Pickup" && (
+                <p className="text-[11px] text-[#a1887f]">Delivery fee: P{deliveryFee.toFixed(2)}</p>
+              )}
+              <div>
                 <label className="text-xs font-semibold text-[#5d4037] block mb-2">Payment Method</label>
                 <div className="flex gap-2">
-                  {["Cash on Delivery", "GCash", "Maya"].map((method) => (
+                  {["Cash on Delivery", "GCash", "Card/Bank"].map((method) => (
                     <button
                       key={method}
-                      onClick={() => setCheckoutInfo((p) => ({ ...p, payment: method }))}
+                      onClick={() => setCheckoutInfo((p) => ({ ...p, payment: method, selectedBank: "", paymentReference: "", paymentProofUrl: "" }))}
                       className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
                         checkoutInfo.payment === method
                           ? "border-[#4caf50] bg-[#DDF8B1] text-[#1b5e20]"
@@ -528,20 +659,83 @@ export default function MenuPage() {
                   ))}
                 </div>
               </div>
+              {checkoutInfo.payment === "GCash" && (
+                <div className="rounded-xl bg-white/70 border border-[#ffe082] p-3">
+                  <p className="text-xs font-semibold text-[#5d4037]">Send payment to J&apos;Bistro GCash</p>
+                  <p className="mt-1 text-sm font-bold text-[#1b5e20]">{GCASH_NUMBER}</p>
+                  <p className="text-xs font-semibold text-[#5d4037]">{GCASH_ACCOUNT_NAME}</p>
+                  <input
+                    type="text"
+                    placeholder="GCash reference number"
+                    value={checkoutInfo.paymentReference ?? ""}
+                    onChange={(e) => setCheckoutInfo((p) => ({ ...p, paymentReference: e.target.value }))}
+                    className="mt-2 w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                  />
+                  <PaymentProofUpload proofUrl={checkoutInfo.paymentProofUrl ?? ""} error={paymentProofError} isUploading={isUploadingPaymentProof} onUpload={handlePaymentProofUpload} />
+                </div>
+              )}
+              {checkoutInfo.payment === "Card/Bank" && (
+                <div className="rounded-xl bg-white/70 border border-[#ffe082] p-3">
+                  <p className="text-xs font-semibold text-[#5d4037] mb-2">Choose bank</p>
+                  <div className="flex gap-2">
+                    {Object.keys(BANK_ACCOUNTS).map((bank) => (
+                      <button
+                        key={bank}
+                        onClick={() => setCheckoutInfo((p) => ({ ...p, selectedBank: bank }))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
+                          checkoutInfo.selectedBank === bank
+                            ? "border-[#4caf50] bg-[#DDF8B1] text-[#1b5e20]"
+                            : "border-[#e0e0e0] text-[#5d4037] hover:border-[#4caf50]"
+                        }`}
+                      >
+                        {bank}
+                      </button>
+                    ))}
+                  </div>
+                  {checkoutInfo.selectedBank && (
+                    <p className="mt-2 text-xs text-[#5d4037]">
+                      J&apos;Bistro {checkoutInfo.selectedBank}: <span className="font-bold text-[#1b5e20]">{BANK_ACCOUNTS[checkoutInfo.selectedBank]}</span>
+                    </p>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Transaction reference number"
+                    value={checkoutInfo.paymentReference ?? ""}
+                    onChange={(e) => setCheckoutInfo((p) => ({ ...p, paymentReference: e.target.value }))}
+                    className="mt-2 w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                  />
+                  <PaymentProofUpload proofUrl={checkoutInfo.paymentProofUrl ?? ""} error={paymentProofError} isUploading={isUploadingPaymentProof} onUpload={handlePaymentProofUpload} />
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-between items-center mb-4 bg-white rounded-xl px-4 py-3 border border-[#ffe082]">
-              <span className="text-xs text-[#a1887f]">Total ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
-              <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
+            <div className="mb-4 bg-white rounded-xl px-4 py-3 border border-[#ffe082] space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#a1887f]">Subtotal ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
+                <span className="text-xs font-bold text-[#1b5e20]">P{subtotalPrice.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#a1887f]">Delivery fee</span>
+                <span className="text-xs font-bold text-[#1b5e20]">P{deliveryFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-[#ffe082] pt-2">
+                <span className="text-xs font-bold text-[#5d4037]">Total</span>
+                <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
+              </div>
             </div>
-
+              {isUploadingPaymentProof ? "Uploading proof..." : `Place Order · P${totalPrice.toFixed(2)}`}
             <button
-              disabled={!checkoutInfo.name || !checkoutInfo.phone || !checkoutInfo.address}
+              disabled={
+                Boolean(checkoutMissingReason) || isPlacingOrder || isUploadingPaymentProof
+              }
               onClick={handlePlaceOrder}
-              className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition"
+              className="sticky bottom-0 w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition"
             >
-              Place Order · P{totalPrice.toFixed(2)}
+              Place Order - P{totalPrice.toFixed(2)}
             </button>
+            {checkoutMissingReason && (
+              <p className="mt-2 text-center text-[11px] text-red-500">{checkoutMissingReason}</p>
+            )}
           </div>
         </div>
       )}
@@ -550,7 +744,7 @@ export default function MenuPage() {
       {showModal && (
         <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4">
           <div className="bg-[#FFF6DE] border border-[#ffe082] rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
-            <div className="text-4xl mb-3">🔒</div>
+            <div className="text-4xl mb-3">Login</div>
             <h3 className="text-base font-bold text-[#1b5e20] mb-1">Login Required</h3>
             <p className="text-xs text-[#a1887f] mb-5">You need to log in or create an account to place an order.</p>
             <div className="flex gap-3">
@@ -562,6 +756,44 @@ export default function MenuPage() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function PaymentProofUpload({
+  proofUrl,
+  error,
+  isUploading,
+  onUpload,
+}: {
+  proofUrl: string;
+  error: string;
+  isUploading: boolean;
+  onUpload: (file: File | undefined) => void;
+}) {
+  return (
+    <div className="mt-3 rounded-lg border border-[#c8e6c9] bg-white p-3">
+      <label className="block text-xs font-semibold text-[#5d4037]">
+        Payment Proof
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={isUploading}
+          onChange={(event) => {
+            void onUpload(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+          className="mt-2 block w-full text-xs text-[#5d4037] file:mr-3 file:rounded-lg file:border-0 file:bg-[#4caf50] file:px-3 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-[#388e3c] disabled:opacity-60"
+        />
+      </label>
+      <p className="mt-2 text-[11px] text-[#a1887f]">Upload JPG, PNG, or WebP under 3MB.</p>
+      {error && <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-600">{error}</p>}
+      {isUploading && <p className="mt-2 text-xs font-semibold text-[#1b5e20]">Uploading proof...</p>}
+      {proofUrl && (
+        <a href={proofUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-bold text-[#1b5e20] hover:underline">
+          View uploaded proof
+        </a>
+      )}
     </div>
   );
 }

@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import SiteFooter from "@/components/site-footer";
+import { notifyAuthChange } from "@/components/use-auth-profile";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getCurrentAppUserRole } from "@/lib/supabase/data";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,26 +18,47 @@ export default function LoginPage() {
   const totalItems = 0;
   const setShowCart = () => router.push("/menu");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isSupabaseConfigured) {
+      setError("Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+
     setLoading(true);
     setError("");
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("users") || "[]");
-      const found = users.find(
-        (u: { email: string; password: string }) =>
-          u.email === email && u.password === password
-      );
-      if (found) {
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.setItem("userEmail", found.email);
-        localStorage.setItem("userName", found.name);
-        router.push("/");
-      } else {
-        setError("Invalid email or password.");
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (signInError) {
+        if (signInError.message.toLowerCase().includes("email not confirmed")) {
+          setError("Please confirm your email first. Check your inbox for the Supabase confirmation link.");
+          return;
+        }
+
+        setError(signInError.message || "Invalid email or password.");
+        return;
       }
+
+      const user = data.user;
+      console.log("[login] Supabase auth user:", { id: user?.id, email: user?.email });
+
+      const role = await getCurrentAppUserRole(user?.id, user?.email);
+      console.log("[login] Redirect role:", role);
+
+      notifyAuthChange();
+      router.push(role === "admin" ? "/admin/dashboard" : "/menu");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to log in right now.");
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   };
 
   return (

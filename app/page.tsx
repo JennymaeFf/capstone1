@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
 import FoodImageCarousel from "@/components/food-image-carousel";
-import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
+import MessageNotificationBadge from "@/components/message-notification-badge";
+import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
 
 const bestSellers = [
   { name: "Indabest Burger", price: "P89.00", image: "/burgers.png" },
@@ -18,7 +19,7 @@ const bestSellers = [
 ];
 
 export default function Home() {
-  const { isLoggedIn, userName } = useAuthProfile();
+  const { isLoggedIn, userId, userName } = useAuthProfile();
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
@@ -34,10 +35,7 @@ export default function Home() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userName");
-    notifyAuthChange();
+    void signOutUser();
     setShowProfile(false);
     router.push("/");
   };
@@ -88,6 +86,10 @@ export default function Home() {
                   <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
                   <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
                   <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
+                  <Link href="/messages" className="flex items-center px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">
+                    Messages
+                    <MessageNotificationBadge userId={userId} />
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"

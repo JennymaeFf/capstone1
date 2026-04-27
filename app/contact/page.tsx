@@ -2,12 +2,76 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
 import FoodImageCarousel from "@/components/food-image-carousel";
-import { useAuthProfile } from "@/components/use-auth-profile";
+import MessageNotificationBadge from "@/components/message-notification-badge";
+import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
+import { CONTACT_MESSAGE_COOLDOWN_SECONDS, CONTACT_MESSAGE_MAX_LENGTH, createContactMessage } from "@/lib/supabase/data";
 
 export default function ContactPage() {
-  const { isLoggedIn, userName } = useAuthProfile();
+  const { isLoggedIn, userId, userName, userEmail } = useAuthProfile();
+  const [showProfile, setShowProfile] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [statusMessage, setStatusMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const profileRef = useRef<HTMLLIElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      setForm((previous) => ({
+        ...previous,
+        name: previous.name || userName || "",
+        email: previous.email || userEmail || "",
+      }));
+    }
+  }, [isLoggedIn, userName, userEmail]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    await signOutUser();
+    setShowProfile(false);
+    router.push("/");
+  };
+
+  const handleSend = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setStatusMessage("");
+
+    if (!isLoggedIn) {
+      router.push("/login");
+      return;
+    }
+
+    if (form.message.trim().length > CONTACT_MESSAGE_MAX_LENGTH) {
+      setError(`Message is too long. Please keep it under ${CONTACT_MESSAGE_MAX_LENGTH} characters.`);
+      return;
+    }
+
+    try {
+      setIsSending(true);
+      await createContactMessage(form);
+      setStatusMessage(`Message sent. You can send another message after ${CONTACT_MESSAGE_COOLDOWN_SECONDS} seconds.`);
+      setForm((previous) => ({ ...previous, message: "" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to send message.");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
@@ -35,11 +99,28 @@ export default function ContactPage() {
               <Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link>
             </li>
           ) : (
-            <li className="flex items-center gap-2 bg-[#DDF8B1] px-4 py-2 rounded-full">
-              <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
+            <li className="relative" ref={profileRef}>
+              <button
+                onClick={() => setShowProfile(!showProfile)}
+                className="flex items-center gap-2 rounded-full bg-[#DDF8B1] px-4 py-2 transition hover:bg-[#c5e8a0]"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
+              </button>
+              {showProfile && (
+                <div className="absolute right-0 z-[200] mt-2 w-48 rounded-xl border border-[#ffe082] bg-white py-2 shadow-lg">
+                  <p className="border-b border-[#ffe082] px-4 py-2 text-xs text-[#a1887f]">{userName}</p>
+                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">Profile</Link>
+                  <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">My Orders</Link>
+                  <Link href="/messages" className="flex items-center px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">
+                    Messages
+                    <MessageNotificationBadge userId={userId} />
+                  </Link>
+                  <button onClick={handleLogout} className="w-full px-4 py-2 text-left text-sm text-red-500 transition hover:bg-red-50">Log Out</button>
+                </div>
+              )}
             </li>
           )}
         </ul>
@@ -53,21 +134,43 @@ export default function ContactPage() {
           <div className="flex flex-col items-center justify-between gap-8 md:flex-row md:items-center lg:gap-10">
 
             {/* FORM */}
-            <form className="w-full max-w-md space-y-4 md:w-1/2">
+            <form onSubmit={handleSend} className="w-full max-w-md space-y-4 md:w-1/2">
+              {statusMessage && <p className="rounded-lg border border-[#c8e6c9] bg-white px-3 py-2 text-sm font-semibold text-[#1b5e20]">{statusMessage}</p>}
+              {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
               <div className="flex flex-col">
                 <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Name:</label>
-                <input type="text" className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]" />
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))}
+                  className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                />
               </div>
               <div className="flex flex-col">
                 <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Email:</label>
-                <input type="email" className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
+                  className="h-11 w-full rounded-lg border border-[#c8e6c9] bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                />
               </div>
               <div className="flex flex-col">
-                <label className="mb-1.5 text-sm font-semibold text-[#5d4037]">Message:</label>
-                <textarea className="h-28 w-full resize-none rounded-lg border border-[#c8e6c9] bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]"></textarea>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label className="text-sm font-semibold text-[#5d4037]">Message:</label>
+                  <span className={`text-xs font-semibold ${form.message.length > CONTACT_MESSAGE_MAX_LENGTH ? "text-red-600" : "text-[#7b7169]"}`}>
+                    {form.message.length}/{CONTACT_MESSAGE_MAX_LENGTH}
+                  </span>
+                </div>
+                <textarea
+                  value={form.message}
+                  onChange={(event) => setForm((previous) => ({ ...previous, message: event.target.value }))}
+                  maxLength={CONTACT_MESSAGE_MAX_LENGTH + 100}
+                  className="h-28 w-full resize-none rounded-lg border border-[#c8e6c9] bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+                />
               </div>
-              <button type="submit" className="rounded-lg bg-[#4caf50] px-8 py-2.5 font-semibold text-white transition hover:bg-[#388e3c]">
-                Send
+              <button type="submit" disabled={isSending || form.message.length > CONTACT_MESSAGE_MAX_LENGTH} className="rounded-lg bg-[#4caf50] px-8 py-2.5 font-semibold text-white transition hover:bg-[#388e3c] disabled:cursor-not-allowed disabled:opacity-60">
+                {isSending ? "Sending..." : "Send"}
               </button>
             </form>
 

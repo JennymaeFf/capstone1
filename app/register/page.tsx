@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -15,12 +16,15 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState("");
   const router = useRouter();
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!name || !email || !password || !confirmPassword) {
+    const fullName = name.trim();
+    const emailAddress = email.trim();
+
+    if (!fullName || !emailAddress || !password || !confirmPassword) {
       setError("Please fill in all fields.");
       return;
     }
@@ -29,22 +33,41 @@ export default function RegisterPage() {
       return;
     }
 
-    // Check if email already exists
-    const users = JSON.parse(localStorage.getItem("users") || "[]");
-    if (users.find((u: { email: string }) => u.email === email)) {
-      setError("Email already registered.");
+    if (!isSupabaseConfigured) {
+      setError("Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
-      // Save new user
-      users.push({ name, email, password });
-      localStorage.setItem("users", JSON.stringify(users));
-      setSuccess("Account created! Redirecting to login...");
-      setTimeout(() => router.push("/login"), 1000);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: emailAddress,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message || "Unable to create account.");
+        return;
+      }
+
+      setSuccess(
+        data.session
+          ? "Account created! Redirecting to login..."
+          : "Account created! Please check your email to confirm your account."
+      );
+      setTimeout(() => router.push("/login"), 1200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create account right now.");
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   };
 
   return (
@@ -67,7 +90,7 @@ export default function RegisterPage() {
           <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
           <li>
             <button onClick={() => router.push("/menu")} className="relative">
-              <span className="text-2xl">ðŸ›’</span>
+              <span className="text-2xl">🛒</span>
             </button>
           </li>
           <li><Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link></li>
