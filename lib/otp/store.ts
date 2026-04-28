@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export type OtpPurpose = "registration" | "login";
 
@@ -7,21 +8,21 @@ type OtpRecord = {
   expiresAt: number;
   attempts: number;
   resendAvailableAt: number;
+  email: string;
+  purpose: OtpPurpose;
 };
 
-type OtpStore = Map<string, OtpRecord>;
-
-const globalForOtp = globalThis as typeof globalThis & {
-  indabestOtpStore?: OtpStore;
-};
-
-const store = globalForOtp.indabestOtpStore ?? new Map<string, OtpRecord>();
-globalForOtp.indabestOtpStore = store;
+type StoredOtpValue = Partial<OtpRecord>;
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
 function getKey(email: string, purpose: OtpPurpose) {
-  return `${purpose}:${email.trim().toLowerCase()}`;
+  const safeEmail = normalizeEmail(email).replace(/[^a-z0-9@._-]/g, "");
+  return `otp:${purpose}:${safeEmail}`;
 }
 
 function getSecret() {
@@ -31,60 +32,141 @@ function getSecret() {
 function hashOtp(email: string, purpose: OtpPurpose, code: string) {
   return crypto
     .createHmac("sha256", getSecret())
-    .update(`${purpose}:${email.trim().toLowerCase()}:${code}`)
+    .update(`${purpose}:${normalizeEmail(email)}:${code}`)
     .digest("hex");
 }
 
-export function getCooldownSeconds(email: string, purpose: OtpPurpose) {
-  const record = store.get(getKey(email, purpose));
+function formatOtpStoreError(step: string, error: { message?: string; details?: string; hint?: string; code?: string }) {
+  return [
+    `${step}: ${error.message || "Unknown Supabase error"}`,
+    error.details ? `Details: ${error.details}` : "",
+    error.hint ? `Hint: ${error.hint}` : "",
+    error.code ? `Code: ${error.code}` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function isOtpRecord(value: StoredOtpValue | null | undefined): value is OtpRecord {
+  return Boolean(
+    value &&
+    typeof value.codeHash === "string" &&
+    typeof value.expiresAt === "number" &&
+    typeof value.attempts === "number" &&
+    typeof value.resendAvailableAt === "number"
+  );
+}
+
+async function readOtpRecord(email: string, purpose: OtpPurpose) {
+  const supabase = getSupabaseServiceClient();
+  const key = getKey(email, purpose);
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[otp/store] read failed", error, { key, email: normalizeEmail(email), purpose });
+    throw new Error(formatOtpStoreError("OTP read failed", error));
+  }
+
+  const value = data?.value as StoredOtpValue | null | undefined;
+  return isOtpRecord(value) ? value : null;
+}
+
+async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRecord) {
+  const supabase = getSupabaseServiceClient();
+  const key = getKey(email, purpose);
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key, value: record }, { onConflict: "key" });
+
+  if (error) {
+    console.error("[otp/store] write failed", error, { key, email: normalizeEmail(email), purpose });
+    throw new Error(formatOtpStoreError("OTP save failed", error));
+  }
+}
+
+async function deleteOtpRecord(email: string, purpose: OtpPurpose) {
+  const supabase = getSupabaseServiceClient();
+  const key = getKey(email, purpose);
+  const { error } = await supabase.from("app_settings").delete().eq("key", key);
+
+  if (error) {
+    console.error("[otp/store] delete failed", error, { key, email: normalizeEmail(email), purpose });
+    throw new Error(formatOtpStoreError("OTP delete failed", error));
+  }
+}
+
+export async function getCooldownSeconds(email: string, purpose: OtpPurpose) {
+  const record = await readOtpRecord(email, purpose);
   if (!record) return 0;
 
   const remainingMs = record.resendAvailableAt - Date.now();
   return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
 }
 
-export function createOtp(email: string, purpose: OtpPurpose) {
+export async function createOtp(email: string, purpose: OtpPurpose) {
+  const normalizedEmail = normalizeEmail(email);
   const code = crypto.randomInt(100000, 1000000).toString();
   const cooldownSeconds = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60);
   const now = Date.now();
 
-  store.set(getKey(email, purpose), {
-    codeHash: hashOtp(email, purpose, code),
+  await writeOtpRecord(normalizedEmail, purpose, {
+    codeHash: hashOtp(normalizedEmail, purpose, code),
     expiresAt: now + OTP_TTL_MS,
     attempts: 0,
     resendAvailableAt: now + cooldownSeconds * 1000,
+    email: normalizedEmail,
+    purpose,
+  });
+
+  console.log("[otp/store] OTP saved", {
+    email: normalizedEmail,
+    purpose,
+    expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
   });
 
   return code;
 }
 
-export function verifyOtp(email: string, purpose: OtpPurpose, code: string) {
-  const key = getKey(email, purpose);
-  const record = store.get(key);
+export async function verifyOtp(email: string, purpose: OtpPurpose, code: string) {
+  const normalizedEmail = normalizeEmail(email);
+  const record = await readOtpRecord(normalizedEmail, purpose);
   const maxAttempts = Number(process.env.OTP_MAX_ATTEMPTS || 3);
 
   if (!record) {
+    console.error("[otp/store] OTP missing", { email: normalizedEmail, purpose });
     return { ok: false, message: "No verification code found. Please request a new OTP." };
   }
 
   if (Date.now() > record.expiresAt) {
-    store.delete(key);
+    await deleteOtpRecord(normalizedEmail, purpose);
     return { ok: false, message: "Your OTP has expired. Please request a new one." };
   }
 
   if (record.attempts >= maxAttempts) {
-    store.delete(key);
+    await deleteOtpRecord(normalizedEmail, purpose);
     return { ok: false, message: "Too many invalid attempts. Please request a new OTP." };
   }
 
   const expectedHash = record.codeHash;
-  const actualHash = hashOtp(email, purpose, code);
+  const actualHash = hashOtp(normalizedEmail, purpose, code);
 
   if (expectedHash !== actualHash) {
-    record.attempts += 1;
+    await writeOtpRecord(normalizedEmail, purpose, {
+      ...record,
+      attempts: record.attempts + 1,
+    });
+    console.error("[otp/store] OTP mismatch", {
+      email: normalizedEmail,
+      purpose,
+      attempts: record.attempts + 1,
+      maxAttempts,
+    });
     return { ok: false, message: "Invalid OTP. Please check the code and try again." };
   }
 
-  store.delete(key);
+  await deleteOtpRecord(normalizedEmail, purpose);
+  console.log("[otp/store] OTP verified", { email: normalizedEmail, purpose });
   return { ok: true, message: "OTP verified." };
 }

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Valid email, purpose, and 6-digit OTP are required." }, { status: 400 });
     }
 
-    const result = verifyOtp(email, purpose, otp);
+    const result = await verifyOtp(email, purpose, otp);
     if (!result.ok) {
       return NextResponse.json({ error: result.message }, { status: 400 });
     }

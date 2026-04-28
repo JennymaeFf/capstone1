@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ enabled: false });
     }
 
-    const cooldownSeconds = getCooldownSeconds(email, purpose);
+    const cooldownSeconds = await getCooldownSeconds(email, purpose);
     if (cooldownSeconds > 0) {
       return NextResponse.json(
         { error: `Please wait ${cooldownSeconds} seconds before requesting another OTP.`, cooldownSeconds },
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const code = createOtp(email, purpose);
+    const code = await createOtp(email, purpose);
     await sendOtpEmail({ email, code, purpose });
 
     return NextResponse.json({ enabled: true, message: "OTP sent." });
