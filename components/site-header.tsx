@@ -50,7 +50,7 @@ export default function SiteHeader() {
         {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
         <li>
           <button
-            onClick={() => router.push("/menu")}
+            onClick={() => router.push("/menu?cart=open")}
             aria-label="Open cart"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF8B1] text-[#1b5e20] transition hover:bg-[#c5e8a0]"
           >

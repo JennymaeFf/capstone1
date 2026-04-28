@@ -58,6 +58,16 @@ const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
   "Bites Express":     [{ label: "Small", extra: 0 }, { label: "Medium", extra: 15 }, { label: "Large", extra: 25 }],
 };
 const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }];
+const RICE_MENU_ITEM: MenuItem = {
+  id: "",
+  name: "Rice",
+  price: "P15.00",
+  basePrice: 15,
+  image: "/rice.png",
+  category: "Extras",
+  isAvailable: true,
+  addons: [],
+};
 
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -84,13 +94,19 @@ export default function MenuPage() {
       try {
         setMenuError("");
         const items = await getAvailableMenuItems();
-        setMenuItems(items);
+        setMenuItems(items.some((item) => item.name.toLowerCase() === "rice") ? items : [...items, RICE_MENU_ITEM]);
       } catch (err) {
         setMenuError(err instanceof Error ? err.message : "Unable to load menu items.");
       }
     };
 
     void loadMenu();
+  }, []);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("cart") === "open") {
+      setShowCart(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -154,17 +170,17 @@ export default function MenuPage() {
   };
 
   const categories = [
-    { label: "All", icon: "???" },
-    { label: "Lemonade Series", icon: "??" },
-    { label: "Float Series", icon: "??" },
-    { label: "Macchiato", icon: "?" },
-    { label: "Zagu Delight", icon: "??" },
-    { label: "Pizza", icon: "??" },
-    { label: "Silog Combo Meals", icon: "??" },
-    { label: "Bites Express", icon: "??" },
-    { label: "Extras", icon: "??" },
-    { label: "Siopao", icon: "??" },
-    { label: "Beers", icon: "??" },
+    { label: "All", icon: "🍽️" },
+    { label: "Lemonade Series", icon: "🍋" },
+    { label: "Float Series", icon: "🥤" },
+    { label: "Macchiato", icon: "☕" },
+    { label: "Zagu Delight", icon: "🧋" },
+    { label: "Pizza", icon: "🍕" },
+    { label: "Silog Combo Meals", icon: "🍳" },
+    { label: "Bites Express", icon: "🍢" },
+    { label: "Extras", icon: "🍚" },
+    { label: "Siopao", icon: "🥟" },
+    { label: "Beers", icon: "🍺" },
   ];
 
   const filteredItems = activeCategory === "All"
