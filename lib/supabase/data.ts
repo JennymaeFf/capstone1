@@ -34,6 +34,7 @@ export type MenuAddonOption = {
   quantityRequired: number;
   isAvailable: boolean;
   stockQuantity?: number;
+  saveAsOrderAddon?: boolean;
   quantity?: number;
 };
 
@@ -59,6 +60,11 @@ export type CartItemForOrder = {
   finalPrice: number;
   addons?: MenuAddonOption[];
 };
+
+function getOrderMenuItemId(id: string | undefined) {
+  if (!id || id.startsWith("addon-item-")) return null;
+  return id;
+}
 
 type OrderAddonForDisplay = {
   name: string;
@@ -519,7 +525,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
       body: JSON.stringify({
         orderId,
         items: cartItemsWithAddons.map((item) => ({
-          menuItemId: item.id || null,
+          menuItemId: getOrderMenuItemId(item.id),
           itemName: item.name,
           size: item.size ?? null,
           quantity: item.quantity,
@@ -529,6 +535,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
             priceDelta: addon.priceDelta,
             quantityRequired: addon.quantityRequired,
             quantity: addon.quantity ?? 1,
+            saveAsOrderAddon: addon.saveAsOrderAddon,
           })),
         })),
       }),
@@ -586,7 +593,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
 
   const itemsPayload: Database["public"]["Tables"]["order_items"]["Insert"][] = args.cart.map((item) => ({
     order_id: order.id,
-    menu_item_id: item.id || null,
+    menu_item_id: getOrderMenuItemId(item.id),
     item_name: item.name,
     image_url: item.image,
     size_label: item.size ?? null,

@@ -9,6 +9,7 @@ type AddonPayload = {
   priceDelta: number;
   quantityRequired?: number;
   quantity?: number;
+  saveAsOrderAddon?: boolean;
 };
 
 type OrderItemPayload = {
@@ -158,6 +159,7 @@ export async function POST(request: Request) {
       usedOrderItemIds.add(matchedOrderItem.id);
       return (item.addons ?? [])
         .filter((addon) => addon.name?.trim())
+        .filter((addon) => addon.saveAsOrderAddon !== false)
         .filter((addon) => {
           const key = `${matchedOrderItem.id}:${addon.inventoryItemId ?? ""}:${normalizeText(addon.name)}`;
           if (existingKeys.has(key)) return false;
@@ -174,12 +176,10 @@ export async function POST(request: Request) {
         }));
     });
 
-    if (addonsToInsert.length === 0) {
-      return NextResponse.json({ inserted: 0, message: "Order add-ons already saved or no matching order item found." });
+    if (addonsToInsert.length > 0) {
+      const { error: insertError } = await serviceSupabase.from("order_addons").insert(addonsToInsert);
+      if (insertError) throw insertError;
     }
-
-    const { error: insertError } = await serviceSupabase.from("order_addons").insert(addonsToInsert);
-    if (insertError) throw insertError;
 
     for (const [inventoryId, requiredQuantity] of stockUseByInventoryId) {
       const inventoryItem = inventoryById.get(inventoryId);
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       if (stockUpdateError) throw stockUpdateError;
     }
 
-    return NextResponse.json({ inserted: addonsToInsert.length });
+    return NextResponse.json({ inserted: addonsToInsert.length, deducted: stockUseByInventoryId.size });
   } catch (error) {
     console.error("[orders/addons]", error);
     return NextResponse.json(

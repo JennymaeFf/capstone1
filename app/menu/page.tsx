@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -9,7 +9,17 @@ import SiteHeader from "@/components/site-header";
 import { useAuthProfile } from "@/components/use-auth-profile";
 import { createOrder, getAvailableMenuItems, getMyProfile, uploadPaymentProof, type MenuAddonOption } from "@/lib/supabase/data";
 
-type MenuItem = { id: string; name: string; price: string; basePrice: number; image: string; category: string; isAvailable: boolean; addons?: MenuAddonOption[] };
+type MenuItem = {
+  id: string;
+  name: string;
+  price: string;
+  basePrice: number;
+  image: string;
+  category: string;
+  isAvailable: boolean;
+  addons?: MenuAddonOption[];
+  standaloneAddon?: MenuAddonOption;
+};
 type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number; addons?: MenuAddonOption[] };
 type CheckoutInfo = {
   name: string;
@@ -70,6 +80,70 @@ const RICE_MENU_ITEM: MenuItem = {
   addons: [],
 };
 
+type MenuAddonApiRow = {
+  id: string;
+  inventory_item_id: string;
+  price_delta: number;
+  quantity_required: number;
+  is_available: boolean;
+};
+
+type InventoryApiRow = {
+  id: string;
+  name: string;
+  quantity: number;
+};
+
+function imageForAddon(name: string) {
+  return name.toLowerCase().includes("rice") ? "/rice.png" : "/logo.png";
+}
+
+async function getStandaloneAddonItems(): Promise<MenuItem[]> {
+  const response = await fetch("/api/menu/addons", { cache: "no-store" });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Unable to load add-on category.");
+
+  const addons = (result.addons ?? []) as MenuAddonApiRow[];
+  const inventory = (result.inventory ?? []) as InventoryApiRow[];
+  const addonByInventoryId = new Map<string, MenuAddonApiRow>();
+
+  addons
+    .filter((addon) => addon.is_available)
+    .forEach((addon) => {
+      if (!addonByInventoryId.has(addon.inventory_item_id)) {
+        addonByInventoryId.set(addon.inventory_item_id, addon);
+      }
+    });
+
+  return inventory
+    .filter((item) => Number(item.quantity) > 0)
+    .filter((item) => addonByInventoryId.has(item.id))
+    .map((item) => {
+      const addon = addonByInventoryId.get(item.id)!;
+      const price = Number(addon.price_delta ?? 0);
+      return {
+        id: `addon-item-${item.id}`,
+        name: item.name,
+        price: `P${price.toFixed(2)}`,
+        basePrice: price,
+        image: imageForAddon(item.name),
+        category: "Add-ons",
+        isAvailable: true,
+        addons: [],
+        standaloneAddon: {
+          id: `stock-${addon.id}`,
+          inventoryItemId: item.id,
+          name: item.name,
+          priceDelta: 0,
+          quantityRequired: Math.max(1, Number(addon.quantity_required ?? 1)),
+          isAvailable: true,
+          stockQuantity: Number(item.quantity),
+          saveAsOrderAddon: false,
+        },
+      };
+    });
+}
+
 function updateNavbarCartCount(count: number) {
   window.localStorage.setItem(CART_COUNT_STORAGE_KEY, String(count));
   window.dispatchEvent(new CustomEvent("indabest:cart-count-changed", { detail: { count } }));
@@ -101,7 +175,9 @@ export default function MenuPage() {
       try {
         setMenuError("");
         const items = await getAvailableMenuItems();
-        setMenuItems(items.some((item) => item.name.toLowerCase() === "rice") ? items : [...items, RICE_MENU_ITEM]);
+        const addonItems = await getStandaloneAddonItems();
+        const withRice = items.some((item) => item.name.toLowerCase() === "rice") ? items : [...items, RICE_MENU_ITEM];
+        setMenuItems([...withRice, ...addonItems]);
       } catch (err) {
         setMenuError(err instanceof Error ? err.message : "Unable to load menu items.");
       }
@@ -191,17 +267,18 @@ export default function MenuPage() {
   };
 
   const categories = [
-    { label: "All", icon: "🍽️" },
-    { label: "Lemonade Series", icon: "🍋" },
-    { label: "Float Series", icon: "🥤" },
-    { label: "Macchiato", icon: "☕" },
-    { label: "Zagu Delight", icon: "🧋" },
-    { label: "Pizza", icon: "🍕" },
-    { label: "Silog Combo Meals", icon: "🍳" },
-    { label: "Bites Express", icon: "🍢" },
-    { label: "Extras", icon: "🍚" },
-    { label: "Siopao", icon: "🥟" },
-    { label: "Beers", icon: "🍺" },
+    { label: "All", icon: "ðŸ½ï¸" },
+    { label: "Lemonade Series", icon: "ðŸ‹" },
+    { label: "Float Series", icon: "ðŸ¥¤" },
+    { label: "Macchiato", icon: "â˜•" },
+    { label: "Zagu Delight", icon: "ðŸ§‹" },
+    { label: "Pizza", icon: "ðŸ•" },
+    { label: "Silog Combo Meals", icon: "ðŸ³" },
+    { label: "Bites Express", icon: "ðŸ¢" },
+    { label: "Extras", icon: "ðŸš" },
+    { label: "Add-ons", icon: "+" },
+    { label: "Siopao", icon: "ðŸ¥Ÿ" },
+    { label: "Beers", icon: "ðŸº" },
   ];
 
   const filteredItems = activeCategory === "All"
@@ -224,6 +301,7 @@ export default function MenuPage() {
   const handleAddToCart = (item: MenuItem, qty = 1, size?: string, selectedAddons: MenuAddonOption[] = []) => {
     if (!isLoggedIn) { setShowModal(true); return; }
     if (!item.isAvailable) return;
+    const visibleSelectedAddons = selectedAddons.filter((addon) => addon.saveAsOrderAddon !== false);
     const basePrice = parseFloat(item.price.replace("P", ""));
     const sizes = getSizes(item.category);
     const selectedSize = size ? sizes.find((s) => s.label === size) : undefined;
@@ -238,8 +316,11 @@ export default function MenuPage() {
           isAvailable: true,
       }]
       : [];
-    const cartAddons = [...selectedAddons, ...sizeAddon];
-    const addonTotal = selectedAddons.reduce((sum, addon) => sum + addon.priceDelta * Number(addon.quantity ?? 1), 0);
+    const stockAddon = item.standaloneAddon
+      ? [{ ...item.standaloneAddon, quantity: 1 }]
+      : [];
+    const cartAddons = [...visibleSelectedAddons, ...sizeAddon, ...stockAddon];
+    const addonTotal = visibleSelectedAddons.reduce((sum, addon) => sum + addon.priceDelta * Number(addon.quantity ?? 1), 0);
     const finalPrice = basePrice + sizeExtra + addonTotal;
     const key = cartKey(item.name, size, cartAddons);
     setCart((prev) => {
@@ -546,9 +627,12 @@ export default function MenuPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-[#5d4037]">{c.name}{c.size && <span className="ml-1 text-xs text-[#4caf50] font-bold">({c.size})</span>}</p>
-                        {(c.addons ?? []).length > 0 && (
+                        {(c.addons ?? []).some((addon) => addon.saveAsOrderAddon !== false) && (
                           <p className="text-[11px] text-[#a1887f]">
-                            {(c.addons ?? []).map((addon) => `+ ${addon.name} x${addon.quantity ?? 1}`).join(", ")}
+                            {(c.addons ?? [])
+                              .filter((addon) => addon.saveAsOrderAddon !== false)
+                              .map((addon) => `+ ${addon.name} x${addon.quantity ?? 1}`)
+                              .join(", ")}
                           </p>
                         )}
                         <p className="text-xs text-[#2e7d32] font-bold">P{(c.finalPrice * c.quantity).toFixed(2)}</p>
@@ -731,10 +815,10 @@ export default function MenuPage() {
             </div>
 
             <div className="mb-4 bg-white rounded-xl px-4 py-3 border border-[#ffe082] space-y-1">
-              {cart.some((item) => (item.addons ?? []).length > 0) && (
+              {cart.some((item) => (item.addons ?? []).some((addon) => addon.saveAsOrderAddon !== false)) && (
                 <div className="mb-2 space-y-1 border-b border-[#ffe082] pb-2">
                   {cart.flatMap((item) =>
-                    (item.addons ?? []).map((addon) => (
+                    (item.addons ?? []).filter((addon) => addon.saveAsOrderAddon !== false).map((addon) => (
                       <div key={`${cartKey(item.name, item.size, item.addons)}-${addon.id}`} className="flex justify-between gap-3">
                         <span className="text-[11px] text-[#a1887f]">
                           {item.name}: + {addon.name} x{addon.quantity ?? 1}
@@ -760,7 +844,7 @@ export default function MenuPage() {
                 <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
               </div>
             </div>
-              {isUploadingPaymentProof ? "Uploading proof..." : `Place Order Â· P${totalPrice.toFixed(2)}`}
+              {isUploadingPaymentProof ? "Uploading proof..." : `Place Order Ã‚Â· P${totalPrice.toFixed(2)}`}
             <button
               disabled={
                 Boolean(checkoutMissingReason) || isPlacingOrder || isUploadingPaymentProof
@@ -834,5 +918,6 @@ function PaymentProofUpload({
     </div>
   );
 }
+
 
 
