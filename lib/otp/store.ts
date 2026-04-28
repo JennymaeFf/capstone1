@@ -12,8 +12,6 @@ type OtpRecord = {
   purpose: OtpPurpose;
 };
 
-type StoredOtpValue = Partial<OtpRecord>;
-
 const OTP_TTL_MS = 5 * 60 * 1000;
 
 function normalizeEmail(email: string) {
@@ -45,22 +43,31 @@ function formatOtpStoreError(step: string, error: { message?: string; details?: 
   ].filter(Boolean).join(" ");
 }
 
-function isOtpRecord(value: StoredOtpValue | null | undefined): value is OtpRecord {
-  return Boolean(
-    value &&
-    typeof value.codeHash === "string" &&
-    typeof value.expiresAt === "number" &&
-    typeof value.attempts === "number" &&
-    typeof value.resendAvailableAt === "number"
-  );
+function mapOtpRow(row: {
+  code_hash: string;
+  expires_at: string;
+  attempts: number;
+  resend_available_at: string;
+  email: string;
+  purpose: OtpPurpose;
+} | null): OtpRecord | null {
+  if (!row) return null;
+  return {
+    codeHash: row.code_hash,
+    expiresAt: new Date(row.expires_at).getTime(),
+    attempts: Number(row.attempts),
+    resendAvailableAt: new Date(row.resend_available_at).getTime(),
+    email: row.email,
+    purpose: row.purpose,
+  };
 }
 
 async function readOtpRecord(email: string, purpose: OtpPurpose) {
   const supabase = getSupabaseServiceClient();
   const key = getKey(email, purpose);
   const { data, error } = await supabase
-    .from("app_settings")
-    .select("value")
+    .from("otp_verifications")
+    .select("code_hash, expires_at, attempts, resend_available_at, email, purpose")
     .eq("key", key)
     .maybeSingle();
 
@@ -69,16 +76,23 @@ async function readOtpRecord(email: string, purpose: OtpPurpose) {
     throw new Error(formatOtpStoreError("OTP read failed", error));
   }
 
-  const value = data?.value as StoredOtpValue | null | undefined;
-  return isOtpRecord(value) ? value : null;
+  return mapOtpRow(data);
 }
 
 async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRecord) {
   const supabase = getSupabaseServiceClient();
   const key = getKey(email, purpose);
   const { error } = await supabase
-    .from("app_settings")
-    .upsert({ key, value: record }, { onConflict: "key" });
+    .from("otp_verifications")
+    .upsert({
+      key,
+      email: record.email,
+      purpose: record.purpose,
+      code_hash: record.codeHash,
+      attempts: record.attempts,
+      expires_at: new Date(record.expiresAt).toISOString(),
+      resend_available_at: new Date(record.resendAvailableAt).toISOString(),
+    }, { onConflict: "key" });
 
   if (error) {
     console.error("[otp/store] write failed", error, { key, email: normalizeEmail(email), purpose });
@@ -89,7 +103,7 @@ async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRec
 async function deleteOtpRecord(email: string, purpose: OtpPurpose) {
   const supabase = getSupabaseServiceClient();
   const key = getKey(email, purpose);
-  const { error } = await supabase.from("app_settings").delete().eq("key", key);
+  const { error } = await supabase.from("otp_verifications").delete().eq("key", key);
 
   if (error) {
     console.error("[otp/store] delete failed", error, { key, email: normalizeEmail(email), purpose });

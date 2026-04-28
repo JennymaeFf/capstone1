@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import Image from "next/image";
+import SiteHeader from "@/components/site-header";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
@@ -11,6 +12,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -75,35 +78,11 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans flex flex-col">
+      <SiteHeader />
 
-      {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm" style={{backdropFilter: 'none'}}>
-        <div className="flex items-center gap-5">
-          <Image src="/logo.png" alt="INDABEST CRAVE CORNER Logo" width={150} height={150} className="object-contain" />
-          <div>
-            <h1 className="text-[#5d4037] text-lg md:text-xl font-bold tracking-wide">INDABEST CRAVE CORNER</h1>
-            <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
-          </div>
-        </div>
-
-        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
-          <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
-          <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
-          <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
-          <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-          <li>
-            <button onClick={() => router.push("/menu")} className="relative">
-              <span className="text-2xl">🛒</span>
-            </button>
-          </li>
-          <li><Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link></li>
-        </ul>
-      </nav>
-
-      {/* CONTENT */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pt-36 pb-10 md:pt-44">
         <div className="flex flex-col items-center mb-4">
-          <Image src="/logo.png" alt="Logo" width={64} height={64} className="object-contain" />
+          <Image src="/logo.png" alt="Logo" width={96} height={96} className="object-contain drop-shadow-sm" priority />
           <h1 className="text-[#1b5e20] font-extrabold text-2xl mt-2 tracking-wide">INDABEST CRAVE CORNER</h1>
           <p className="text-[#5d4037] text-sm mt-1">We got your cravings covered!</p>
         </div>
@@ -136,21 +115,19 @@ export default function RegisterPage() {
               className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
               required
             />
-            <input
-              type="password"
+            <PasswordInput
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
               placeholder="Password"
-              className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
-              required
+              visible={showPassword}
+              onToggle={() => setShowPassword((value) => !value)}
             />
-            <input
-              type="password"
+            <PasswordInput
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={setConfirmPassword}
               placeholder="Confirm password"
-              className="w-full px-3 py-2 bg-white border border-[#c8e6c9] rounded-lg text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
-              required
+              visible={showConfirmPassword}
+              onToggle={() => setShowConfirmPassword((value) => !value)}
             />
             <button
               type="submit"
@@ -170,9 +147,58 @@ export default function RegisterPage() {
         </div>
 
         <Link href="/" className="mt-4 text-xs text-[#5d4037] hover:text-[#4caf50] transition">
-          ← Back to Home
+          Back to Home
         </Link>
       </div>
+    </div>
+  );
+}
+
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  visible,
+  onToggle,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-[#c8e6c9] bg-white px-3 py-2 pr-10 text-sm text-[#5d4037] placeholder-[#bcaaa4] focus:outline-none focus:ring-2 focus:ring-[#4caf50]"
+        required
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={visible ? "Hide password" : "Show password"}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-[#5d4037] transition hover:text-[#4caf50]"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {visible ? (
+            <>
+              <path d="M3 3l18 18" />
+              <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+              <path d="M9.9 5.1A9.8 9.8 0 0 1 12 5c5 0 9 4 10 7a12.8 12.8 0 0 1-3 4.4" />
+              <path d="M6.6 6.6A12.3 12.3 0 0 0 2 12c1 3 5 7 10 7a9.8 9.8 0 0 0 4.2-.9" />
+            </>
+          ) : (
+            <>
+              <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="3" />
+            </>
+          )}
+        </svg>
+      </button>
     </div>
   );
 }

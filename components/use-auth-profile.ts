@@ -11,6 +11,7 @@ type AuthProfile = {
   userId: string;
   userName: string;
   userEmail: string;
+  avatarUrl: string;
   isSupabaseReady: boolean;
 };
 
@@ -20,6 +21,7 @@ const DEFAULT_AUTH_PROFILE: AuthProfile = {
   userId: "",
   userName: "",
   userEmail: "",
+  avatarUrl: "",
   isSupabaseReady: isSupabaseConfigured,
 };
 
@@ -55,6 +57,7 @@ export function useAuthProfile() {
           userId: "",
           userName: "",
           userEmail: "",
+          avatarUrl: "",
           isSupabaseReady: true,
         });
         return;
@@ -62,7 +65,7 @@ export function useAuthProfile() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name")
+        .select("full_name, avatar_url")
         .eq("id", sessionUser.id)
         .maybeSingle();
 
@@ -74,6 +77,7 @@ export function useAuthProfile() {
         userId: sessionUser.id,
         userName: fullName,
         userEmail: sessionUser.email || "",
+        avatarUrl: profile?.avatar_url || "",
         isSupabaseReady: true,
       });
     };

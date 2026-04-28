@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
-import { notifyAuthChange, signOutUser, useAuthProfile } from "@/components/use-auth-profile";
+import SiteHeader from "@/components/site-header";
+import { notifyAuthChange, useAuthProfile } from "@/components/use-auth-profile";
 import { getMyProfile, uploadProfilePicture, upsertMyProfile } from "@/lib/supabase/data";
 
 export default function ProfilePage() {
@@ -67,11 +66,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLogout = async () => {
-    await signOutUser();
-    router.push("/");
-  };
-
   const handleAvatarUpload = async (file: File | undefined) => {
     if (!file) return;
 
@@ -93,37 +87,43 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans flex flex-col">
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm">
-        <div className="flex items-center gap-5">
-          <Image src="/logo.png" alt="Logo" width={150} height={150} className="object-contain" />
-          <div>
-            <h1 className="text-[#5d4037] text-lg md:text-xl font-bold tracking-wide">INDABEST CRAVE CORNER</h1>
-            <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
-          </div>
-        </div>
-        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
-          <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
-          <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
-          <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>
-          <li><button onClick={handleLogout} className="font-semibold text-red-500 hover:text-red-600">LOG OUT</button></li>
-        </ul>
-      </nav>
+      <SiteHeader />
 
-      <main className="flex-1 px-4 pt-36 pb-12 md:pt-44">
-        <div className="mx-auto max-w-lg rounded-xl border border-[#ffe082] bg-[#FFF6DE] p-6 shadow-md">
-          <div className="mb-5 text-center">
+      <main className="flex-1 px-4 pt-32 pb-12 md:pt-40">
+        <div className="mx-auto max-w-4xl">
+          <button
+            onClick={() => router.back()}
+            className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#FFF6DE] px-4 py-2 text-sm font-bold text-[#1b5e20] shadow-sm transition hover:bg-white"
+          >
+            <span aria-hidden="true">â†</span>
+            Back
+          </button>
+        </div>
+
+        <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-[280px_minmax(0,1fr)]">
+          <section className="rounded-2xl border border-[#ffe082] bg-[#FFF6DE] p-6 text-center shadow-md">
             {avatarUrl ? (
-              <div className="mx-auto mb-3 h-20 w-20 overflow-hidden rounded-full border-4 border-[#DDF8B1] bg-white shadow-sm">
+              <div className="mx-auto mb-4 h-28 w-28 overflow-hidden rounded-full border-4 border-[#DDF8B1] bg-white shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={avatarUrl} alt="Profile picture" className="h-full w-full object-cover" />
               </div>
             ) : (
-              <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#1b5e20] text-2xl font-bold text-white">
+              <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-full bg-[#1b5e20] text-4xl font-bold text-white shadow-sm">
                 {(fullName || userEmail || "U").charAt(0).toUpperCase()}
               </div>
             )}
-            <h2 className="text-xl font-extrabold text-[#1b5e20]">My Profile</h2>
-            <p className="text-xs text-[#a1887f]">{userEmail}</p>
+            <h2 className="text-2xl font-extrabold text-[#1b5e20]">{fullName || "My Profile"}</h2>
+            <p className="mt-1 break-words text-xs text-[#a1887f]">{userEmail}</p>
+            <div className="mt-5 rounded-xl border border-[#ffe082] bg-white/70 px-4 py-3 text-left">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4caf50]">Account</p>
+              <p className="mt-1 text-sm font-semibold text-[#5d4037]">Profile and delivery details</p>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[#ffe082] bg-[#FFF6DE] p-6 shadow-md">
+          <div className="mb-5">
+            <h2 className="text-xl font-extrabold text-[#1b5e20]">Edit Profile</h2>
+            <p className="text-xs text-[#a1887f]">Keep your delivery information updated.</p>
           </div>
 
           {error && <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-500">{error}</p>}
@@ -182,6 +182,7 @@ export default function ProfilePage() {
               {saving ? "Saving..." : "Save Profile"}
             </button>
           </form>
+          </section>
         </div>
       </main>
 
@@ -189,3 +190,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

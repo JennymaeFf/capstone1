@@ -176,21 +176,36 @@ export type Database = {
         };
         Relationships: [];
       };
-      app_settings: {
+      otp_verifications: {
         Row: {
           key: string;
-          value: Json;
-          updated_at: string;
+          email: string;
+          purpose: "registration" | "login";
+          code_hash: string;
+          attempts: number;
+          expires_at: string;
+          resend_available_at: string;
+          created_at: string;
         };
         Insert: {
           key: string;
-          value?: Json;
-          updated_at?: string;
+          email: string;
+          purpose: "registration" | "login";
+          code_hash: string;
+          attempts?: number;
+          expires_at: string;
+          resend_available_at: string;
+          created_at?: string;
         };
         Update: {
           key?: string;
-          value?: Json;
-          updated_at?: string;
+          email?: string;
+          purpose?: "registration" | "login";
+          code_hash?: string;
+          attempts?: number;
+          expires_at?: string;
+          resend_available_at?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -294,6 +309,7 @@ export type Database = {
           inventory_item_id: string | null;
           addon_name: string;
           price_delta: number;
+          total_price: number;
           quantity: number;
           created_at: string;
         };
@@ -303,6 +319,7 @@ export type Database = {
           inventory_item_id?: string | null;
           addon_name: string;
           price_delta?: number;
+          total_price?: number;
           quantity: number;
           created_at?: string;
         };
@@ -312,6 +329,7 @@ export type Database = {
           inventory_item_id?: string | null;
           addon_name?: string;
           price_delta?: number;
+          total_price?: number;
           quantity?: number;
           created_at?: string;
         };

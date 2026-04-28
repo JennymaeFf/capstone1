@@ -76,9 +76,28 @@ create table if not exists public.app_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.otp_verifications (
+  key text primary key,
+  email text not null,
+  purpose text not null check (purpose in ('registration', 'login')),
+  code_hash text not null,
+  attempts integer not null default 0,
+  expires_at timestamptz not null,
+  resend_available_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
 insert into public.app_settings (key, value)
 values ('store_status', '{"is_open": true, "message": ""}'::jsonb)
 on conflict (key) do nothing;
+
+insert into public.app_settings (key, value)
+values (
+  'system_settings',
+  '{"delivery_fee": 30, "tax_rate": 0, "restaurant_name": "Indabest Crave Corner"}'::jsonb
+)
+on conflict (key) do update
+set value = public.app_settings.value || excluded.value;
 
 insert into public.app_users (id, role)
 select id, case when is_admin then 'admin' else 'customer' end
@@ -135,6 +154,10 @@ create table if not exists public.menu_item_inventory_requirements (
   unique (menu_item_id, inventory_item_id)
 );
 
+create or replace view public.menu_item_inventory as
+select id, menu_item_id, inventory_item_id, quantity_required, created_at
+from public.menu_item_inventory_requirements;
+
 create table if not exists public.menu_item_addons (
   id uuid primary key default gen_random_uuid(),
   menu_item_id uuid not null references public.menu_items(id) on delete cascade,
@@ -185,9 +208,13 @@ create table if not exists public.order_addons (
   inventory_item_id uuid references public.inventory_items(id) on delete set null,
   addon_name text not null,
   price_delta numeric(10, 2) not null default 0,
+  total_price numeric(10, 2) not null default 0,
   quantity integer not null check (quantity > 0),
   created_at timestamptz not null default now()
 );
+
+alter table public.order_addons
+add column if not exists total_price numeric(10, 2) not null default 0;
 
 create table if not exists public.contact_messages (
   id uuid primary key default gen_random_uuid(),

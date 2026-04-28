@@ -33,6 +33,7 @@ export type MenuAddonOption = {
   priceDelta: number;
   quantityRequired: number;
   isAvailable: boolean;
+  quantity?: number;
 };
 
 export type CheckoutInfo = {
@@ -45,7 +46,6 @@ export type CheckoutInfo = {
   paymentReference?: string;
   paymentProofUrl?: string;
   deliveryOption?: string;
-  deliveryDistanceKm?: number;
   deliveryFee?: number;
 };
 
@@ -63,6 +63,7 @@ type OrderAddonForDisplay = {
   name: string;
   quantity: number;
   priceDelta: number;
+  totalPrice: number;
 };
 
 export type OrderWithItems = {
@@ -73,7 +74,6 @@ export type OrderWithItems = {
   total: number;
   subtotal: number;
   deliveryFee: number;
-  deliveryDistanceKm: number;
   deliveryOption: string;
   customer: {
     name: string;
@@ -87,18 +87,8 @@ export type OrderWithItems = {
   items: { name: string; image: string; quantity: number; size?: string; finalPrice: number; addons?: OrderAddonForDisplay[] }[];
 };
 
-export type StoreStatus = {
-  isOpen: boolean;
-  message: string;
-};
-
 export const CONTACT_MESSAGE_MAX_LENGTH = 1000;
 export const CONTACT_MESSAGE_COOLDOWN_SECONDS = 60;
-
-const DEFAULT_STORE_STATUS: StoreStatus = {
-  isOpen: true,
-  message: "",
-};
 
 function mapMenuItem(row: MenuRow): AppMenuItem {
   return {
@@ -111,14 +101,6 @@ function mapMenuItem(row: MenuRow): AppMenuItem {
     isAvailable: row.is_available,
     isManuallyAvailable: row.is_manually_available,
     description: row.description ?? undefined,
-  };
-}
-
-function mapStoreStatus(value: Database["public"]["Tables"]["app_settings"]["Row"]["value"] | undefined): StoreStatus {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return DEFAULT_STORE_STATUS;
-  return {
-    isOpen: typeof value.is_open === "boolean" ? value.is_open : DEFAULT_STORE_STATUS.isOpen,
-    message: typeof value.message === "string" && value.message.trim() ? value.message : DEFAULT_STORE_STATUS.message,
   };
 }
 
@@ -138,63 +120,6 @@ export async function getMenuItems() {
     .order("name", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapMenuItem);
-}
-
-export async function getStoreStatus() {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("app_settings")
-    .select("value")
-    .eq("key", "store_status")
-    .maybeSingle();
-
-  if (error) {
-    const message = error.message.toLowerCase();
-    if (
-      message.includes("app_settings") ||
-      message.includes("does not exist") ||
-      message.includes("schema cache") ||
-      message.includes("could not find")
-    ) {
-      return DEFAULT_STORE_STATUS;
-    }
-
-    throw error;
-  }
-
-  return mapStoreStatus(data?.value);
-}
-
-export async function updateStoreStatus(status: StoreStatus) {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("app_settings")
-    .upsert({
-      key: "store_status",
-      value: {
-        is_open: status.isOpen,
-        message: status.message,
-      },
-    }, { onConflict: "key" })
-    .select("value")
-    .single();
-
-  if (error) {
-    const message = error.message.toLowerCase();
-    if (
-      message.includes("app_settings") ||
-      message.includes("row-level security") ||
-      message.includes("violates row-level security") ||
-      message.includes("permission denied") ||
-      message.includes("does not exist") ||
-      message.includes("schema cache") ||
-      message.includes("could not find")
-    ) {
-      throw new Error("Store status setup is not complete. Run supabase/store_status_setup.sql in Supabase SQL Editor, then refresh admin.");
-    }
-    throw error;
-  }
-  return mapStoreStatus(data.value);
 }
 
 export async function getAvailableMenuItems() {
@@ -541,15 +466,9 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
   if (args.cart.length === 0) throw new Error("Your cart is empty.");
   if (!args.checkoutInfo.phone || !args.checkoutInfo.address) throw new Error("Please complete your delivery details.");
 
-  const storeStatus = await getStoreStatus();
-  if (!storeStatus.isOpen) {
-    throw new Error(storeStatus.message || "Store is closed right now.");
-  }
-
   const subtotal = Number(args.totalPrice);
   const deliveryFee = Number(args.checkoutInfo.deliveryFee ?? 0);
   const totalAmount = subtotal + deliveryFee;
-  const deliveryDistanceKm = Number(args.checkoutInfo.deliveryDistanceKm ?? 0);
   const paymentMethod = args.checkoutInfo.payment;
 
   if (paymentMethod === "GCash" && !args.checkoutInfo.paymentReference?.trim()) {
@@ -591,6 +510,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
             name: addon.name,
             priceDelta: addon.priceDelta,
             quantityRequired: addon.quantityRequired,
+            quantity: addon.quantity ?? 1,
           })),
         })),
       }),
@@ -603,59 +523,6 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
     }
   };
 
-  const rpcItems = args.cart.map((item) => ({
-    menu_item_id: item.id ?? null,
-    item_name: item.name,
-    image_url: item.image,
-    size_label: item.size ?? null,
-    unit_price: item.finalPrice,
-    quantity: item.quantity,
-    addons: (item.addons ?? []).map((addon) => ({
-      inventory_item_id: addon.inventoryItemId,
-      addon_name: addon.name,
-      price_delta: addon.priceDelta,
-      quantity_required: addon.quantityRequired,
-    })),
-  }));
-
-  const { data: orderId, error: orderError } = await supabase.rpc("place_order_with_inventory", {
-    p_phone: args.checkoutInfo.phone,
-    p_address: args.checkoutInfo.address,
-    p_payment_method: paymentMethod,
-    p_total_amount: totalAmount,
-    p_items: rpcItems,
-    p_subtotal_amount: subtotal,
-    p_delivery_option: args.checkoutInfo.deliveryOption ?? "Delivery",
-    p_delivery_distance_km: deliveryDistanceKm,
-    p_delivery_fee: deliveryFee,
-    p_selected_bank: args.checkoutInfo.selectedBank ?? null,
-    p_payment_reference: args.checkoutInfo.paymentReference?.trim() || null,
-    p_payment_proof_url: args.checkoutInfo.paymentProofUrl ?? null,
-  });
-
-  if (!orderError) {
-    await syncOrderAddons(orderId);
-    await upsertMyProfile({
-      full_name: args.checkoutInfo.name,
-      phone: args.checkoutInfo.phone,
-      address: args.checkoutInfo.address,
-    });
-
-    return orderId;
-  }
-
-  const shouldFallbackToDirectInsert =
-    orderError.message.includes("Could not find the function") ||
-    orderError.message.includes("function public.place_order_with_inventory") ||
-    orderError.message.includes("schema cache") ||
-    orderError.message.includes("does not exist") ||
-    orderError.message.includes("Could not find") ||
-    orderError.message.includes("PGRST");
-
-  if (!shouldFallbackToDirectInsert) {
-    throw new Error(orderError.message || "Supabase could not place the order.");
-  }
-
   let { data: order, error: directOrderError } = await supabase
     .from("orders")
     .insert({
@@ -666,7 +533,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
       phone: args.checkoutInfo.phone,
       address: args.checkoutInfo.address,
       delivery_option: args.checkoutInfo.deliveryOption ?? "Delivery",
-      delivery_distance_km: deliveryDistanceKm,
+      delivery_distance_km: 0,
       delivery_fee: deliveryFee,
       payment_method: paymentMethod,
       selected_bank: args.checkoutInfo.selectedBank ?? null,
@@ -749,7 +616,6 @@ export async function getMyOrders() {
     total: Number(order.total_amount),
     subtotal: Number(order.subtotal_amount ?? order.total_amount),
     deliveryFee: Number(order.delivery_fee ?? 0),
-    deliveryDistanceKm: Number(order.delivery_distance_km ?? 0),
     deliveryOption: order.delivery_option ?? "Delivery",
     customer: {
       name: displayName,
@@ -770,6 +636,7 @@ export async function getMyOrders() {
         name: addon.addon_name,
         quantity: addon.quantity,
         priceDelta: Number(addon.price_delta),
+        totalPrice: Number(addon.total_price ?? Number(addon.price_delta) * addon.quantity),
       })),
     })),
   })) as OrderWithItems[];

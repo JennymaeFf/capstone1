@@ -1,23 +1,19 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
+import SiteHeader from "@/components/site-header";
 import FoodImageCarousel from "@/components/food-image-carousel";
-import MessageNotificationBadge from "@/components/message-notification-badge";
-import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
+import { useAuthProfile } from "@/components/use-auth-profile";
 import { CONTACT_MESSAGE_COOLDOWN_SECONDS, CONTACT_MESSAGE_MAX_LENGTH, createContactMessage } from "@/lib/supabase/data";
 
 export default function ContactPage() {
-  const { isLoggedIn, userId, userName, userEmail } = useAuthProfile();
-  const [showProfile, setShowProfile] = useState(false);
+  const { isLoggedIn, userName, userEmail } = useAuthProfile();
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [statusMessage, setStatusMessage] = useState("");
   const [error, setError] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,22 +25,6 @@ export default function ContactPage() {
       }));
     }
   }, [isLoggedIn, userName, userEmail]);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setShowProfile(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleLogout = async () => {
-    await signOutUser();
-    setShowProfile(false);
-    router.push("/");
-  };
 
   const handleSend = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -76,55 +56,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
 
-      {/* FIXED HEADER */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm">
-        <div className="flex items-center gap-5">
-          <Image src="/logo.png" alt="INDABEST CRAVE CORNER Logo" width={150} height={150} className="object-contain" />
-          <div>
-            <h1 className="text-[#5d4037] text-lg md:text-xl font-bold tracking-wide">INDABEST CRAVE CORNER</h1>
-            <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
-          </div>
-        </div>
-
-        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
-          <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
-          <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
-          <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
-          <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-          {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
-
-          {/* LOGIN or PROFILE */}
-          {!isLoggedIn ? (
-            <li>
-              <Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link>
-            </li>
-          ) : (
-            <li className="relative" ref={profileRef}>
-              <button
-                onClick={() => setShowProfile(!showProfile)}
-                className="flex items-center gap-2 rounded-full bg-[#DDF8B1] px-4 py-2 transition hover:bg-[#c5e8a0]"
-              >
-                <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
-                  {userName.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
-              </button>
-              {showProfile && (
-                <div className="absolute right-0 z-[200] mt-2 w-48 rounded-xl border border-[#ffe082] bg-white py-2 shadow-lg">
-                  <p className="border-b border-[#ffe082] px-4 py-2 text-xs text-[#a1887f]">{userName}</p>
-                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">Profile</Link>
-                  <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">My Orders</Link>
-                  <Link href="/messages" className="flex items-center px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">
-                    Messages
-                    <MessageNotificationBadge userId={userId} />
-                  </Link>
-                  <button onClick={handleLogout} className="w-full px-4 py-2 text-left text-sm text-red-500 transition hover:bg-red-50">Log Out</button>
-                </div>
-              )}
-            </li>
-          )}
-        </ul>
-      </nav>
+      <SiteHeader />
 
       <main className="bg-[#DDF8B1] px-6 pb-10 pt-28 md:px-16 md:pb-12 md:pt-32">
         <div className="max-w-7xl mx-auto">
@@ -188,3 +120,4 @@ export default function ContactPage() {
     </div>
   );
 }
+

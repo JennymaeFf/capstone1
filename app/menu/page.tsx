@@ -1,13 +1,13 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import SiteFooter from "@/components/site-footer";
-import MessageNotificationBadge from "@/components/message-notification-badge";
-import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
-import { createOrder, getAvailableMenuItems, getMyProfile, getStoreStatus, uploadPaymentProof, type MenuAddonOption, type StoreStatus } from "@/lib/supabase/data";
+import SiteHeader from "@/components/site-header";
+import { useAuthProfile } from "@/components/use-auth-profile";
+import { createOrder, getAvailableMenuItems, getMyProfile, uploadPaymentProof, type MenuAddonOption } from "@/lib/supabase/data";
 
 type MenuItem = { id: string; name: string; price: string; basePrice: number; image: string; category: string; isAvailable: boolean; addons?: MenuAddonOption[] };
 type CartItem = MenuItem & { quantity: number; size?: string; finalPrice: number; addons?: MenuAddonOption[] };
@@ -34,7 +34,7 @@ const DEFAULT_CHECKOUT_INFO: CheckoutInfo = {
   paymentReference: "",
   paymentProofUrl: "",
   deliveryOption: "Delivery",
-  deliveryFee: 20,
+  deliveryFee: 30,
 };
 
 const GCASH_NUMBER = "09486123571";
@@ -44,7 +44,7 @@ const BANK_ACCOUNTS: Record<string, string> = {
   BDO: "8734-0098-6783",
   BPI: "9879-0098-2351",
 };
-const DELIVERY_BASE_FEE = 20;
+const DEFAULT_DELIVERY_FEE = 30;
 
 const DRINK_CATEGORIES = ["Lemonade Series", "Float Series", "Macchiato", "Zagu Delight"];
 const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
@@ -61,12 +61,13 @@ const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { l
 
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
-  const { isLoggedIn, userId, userName, userEmail } = useAuthProfile();
+  const { isLoggedIn, userName, userEmail } = useAuthProfile();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [modalQty, setModalQty] = useState(1);
   const [modalSize, setModalSize] = useState("Small");
+  const [modalAddonQuantities, setModalAddonQuantities] = useState<Record<string, number>>({});
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutInfo, setCheckoutInfo] = useState<CheckoutInfo>(DEFAULT_CHECKOUT_INFO);
@@ -74,22 +75,9 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuError, setMenuError] = useState("");
   const [paymentProofError, setPaymentProofError] = useState("");
-  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "" });
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const profileRef = useRef<HTMLLIElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setShowProfile(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   useEffect(() => {
     const loadMenu = async () => {
@@ -99,13 +87,6 @@ export default function MenuPage() {
         setMenuItems(items);
       } catch (err) {
         setMenuError(err instanceof Error ? err.message : "Unable to load menu items.");
-      }
-
-      try {
-        const status = await getStoreStatus();
-        setStoreStatus(status);
-      } catch (err) {
-        console.warn("[menu] Unable to load store status.", err);
       }
     };
 
@@ -128,7 +109,7 @@ export default function MenuPage() {
           paymentReference: "",
           paymentProofUrl: "",
           deliveryOption: "Delivery",
-          deliveryFee: 20,
+          deliveryFee: DEFAULT_DELIVERY_FEE,
         });
       } catch {
         setProfileCheckoutInfo({
@@ -141,20 +122,13 @@ export default function MenuPage() {
           paymentReference: "",
           paymentProofUrl: "",
           deliveryOption: "Delivery",
-          deliveryFee: 20,
+          deliveryFee: DEFAULT_DELIVERY_FEE,
         });
       }
     };
 
     void loadProfile();
   }, [isLoggedIn, userName, userEmail]);
-
-  const handleLogout = async () => {
-    await signOutUser();
-    localStorage.removeItem("checkoutInfo");
-    setShowProfile(false);
-    router.push("/");
-  };
 
   const getSavedCheckoutInfo = (): CheckoutInfo => {
     const savedInfo = JSON.parse(localStorage.getItem("checkoutInfo") || "{}") as Partial<CheckoutInfo>;
@@ -169,32 +143,28 @@ export default function MenuPage() {
       paymentReference: "",
       paymentProofUrl: "",
       deliveryOption: savedInfo.deliveryOption || "Delivery",
-      deliveryFee: Number(savedInfo.deliveryFee ?? 20),
+      deliveryFee: savedInfo.deliveryOption === "Pickup" ? 0 : DEFAULT_DELIVERY_FEE,
     };
   };
 
   const openCheckout = () => {
-    if (!storeStatus.isOpen) {
-      setMenuError(storeStatus.message || "Store is closed right now.");
-      return;
-    }
     setCheckoutInfo(getSavedCheckoutInfo());
     setShowCart(false);
     setShowCheckout(true);
   };
 
   const categories = [
-    { label: "All", icon: "🍽️" },
-    { label: "Lemonade Series", icon: "🍋" },
-    { label: "Float Series", icon: "🥤" },
-    { label: "Macchiato", icon: "☕" },
-    { label: "Zagu Delight", icon: "🧋" },
-    { label: "Pizza", icon: "🍕" },
-    { label: "Silog Combo Meals", icon: "🍳" },
-    { label: "Bites Express", icon: "🍢" },
-    { label: "Extras", icon: "🍜" },
-    { label: "Siopao", icon: "🥟" },
-    { label: "Beers", icon: "🍺" },
+    { label: "All", icon: "???" },
+    { label: "Lemonade Series", icon: "??" },
+    { label: "Float Series", icon: "??" },
+    { label: "Macchiato", icon: "?" },
+    { label: "Zagu Delight", icon: "??" },
+    { label: "Pizza", icon: "??" },
+    { label: "Silog Combo Meals", icon: "??" },
+    { label: "Bites Express", icon: "??" },
+    { label: "Extras", icon: "??" },
+    { label: "Siopao", icon: "??" },
+    { label: "Beers", icon: "??" },
   ];
 
   const filteredItems = activeCategory === "All"
@@ -204,13 +174,18 @@ export default function MenuPage() {
   const hasSizes = (category: string) => category in SIZE_OPTIONS;
   const getSizes = (category: string) => SIZE_OPTIONS[category] ?? SIZES;
 
-  const cartKey = (name: string, size?: string) => size ? `${name}__${size}` : name;
-  const getQty = (name: string, size?: string) => cart.find((c) => cartKey(c.name, c.size) === cartKey(name, size))?.quantity ?? 0;
+  const addonKey = (addons?: MenuAddonOption[]) =>
+    (addons ?? [])
+      .filter((addon) => (addon.quantity ?? 0) > 0)
+      .map((addon) => `${addon.id}:${addon.quantity}`)
+      .sort()
+      .join("|");
+  const cartKey = (name: string, size?: string, addons?: MenuAddonOption[]) => `${name}__${size ?? ""}__${addonKey(addons)}`;
+  const getQty = (name: string, size?: string) => cart.find((c) => cartKey(c.name, c.size, c.addons) === cartKey(name, size))?.quantity ?? 0;
   const getTotalQtyByName = (name: string) => cart.filter((c) => c.name === name).reduce((s, c) => s + c.quantity, 0);
 
-  const handleAddToCart = (item: MenuItem, qty = 1, size?: string) => {
+  const handleAddToCart = (item: MenuItem, qty = 1, size?: string, selectedAddons: MenuAddonOption[] = []) => {
     if (!isLoggedIn) { setShowModal(true); return; }
-    if (!storeStatus.isOpen) { setMenuError(storeStatus.message || "Store is closed right now."); return; }
     if (!item.isAvailable) return;
     const basePrice = parseFloat(item.price.replace("P", ""));
     const sizes = getSizes(item.category);
@@ -224,29 +199,30 @@ export default function MenuPage() {
           priceDelta: selectedSize.extra,
           quantityRequired: 1,
           isAvailable: true,
-        }]
+      }]
       : [];
-    const cartAddons = [...(item.addons ?? []), ...sizeAddon];
-    const finalPrice = basePrice + sizeExtra;
-    const key = cartKey(item.name, size);
+    const cartAddons = [...selectedAddons, ...sizeAddon];
+    const addonTotal = selectedAddons.reduce((sum, addon) => sum + addon.priceDelta * Number(addon.quantity ?? 1), 0);
+    const finalPrice = basePrice + sizeExtra + addonTotal;
+    const key = cartKey(item.name, size, cartAddons);
     setCart((prev) => {
-      const existing = prev.find((c) => cartKey(c.name, c.size) === key);
-      if (existing) return prev.map((c) => cartKey(c.name, c.size) === key ? { ...c, quantity: c.quantity + qty } : c);
+      const existing = prev.find((c) => cartKey(c.name, c.size, c.addons) === key);
+      if (existing) return prev.map((c) => cartKey(c.name, c.size, c.addons) === key ? { ...c, quantity: c.quantity + qty } : c);
       return [...prev, { ...item, addons: cartAddons, quantity: qty, size, finalPrice }];
     });
   };
 
-  const handleDecrement = (name: string, size?: string) => {
-    const key = cartKey(name, size);
+  const handleDecrement = (name: string, size?: string, addons?: MenuAddonOption[]) => {
+    const key = cartKey(name, size, addons);
     setCart((prev) => {
-      const existing = prev.find((c) => cartKey(c.name, c.size) === key);
+      const existing = prev.find((c) => cartKey(c.name, c.size, c.addons) === key);
       if (!existing) return prev;
-      if (existing.quantity === 1) return prev.filter((c) => cartKey(c.name, c.size) !== key);
-      return prev.map((c) => cartKey(c.name, c.size) === key ? { ...c, quantity: c.quantity - 1 } : c);
+      if (existing.quantity === 1) return prev.filter((c) => cartKey(c.name, c.size, c.addons) !== key);
+      return prev.map((c) => cartKey(c.name, c.size, c.addons) === key ? { ...c, quantity: c.quantity - 1 } : c);
     });
   };
 
-  const closeModal = () => { setSelectedItem(null); setModalQty(1); setModalSize(getSizes(selectedItem?.category ?? "")[0]?.label ?? "Small"); };
+  const closeModal = () => { setSelectedItem(null); setModalQty(1); setModalAddonQuantities({}); setModalSize(getSizes(selectedItem?.category ?? "")[0]?.label ?? "Small"); };
 
   const handlePlaceOrder = async () => {
     setIsPlacingOrder(true);
@@ -299,71 +275,7 @@ export default function MenuPage() {
   return (
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
 
-      {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-[100] bg-[#FFF6DE] px-6 md:px-16 py-5 flex justify-between items-center border-b border-[#ffe082] shadow-sm" style={{backdropFilter: 'none'}}>
-        <div className="flex items-center gap-5">
-          <Image src="/logo.png" alt="Logo" width={150} height={150} className="object-contain" />
-          <div>
-            <h1 className="text-[#5d4037] text-lg md:text-xl font-bold tracking-wide">INDABEST CRAVE CORNER</h1>
-            <p className="text-[#a1887f] text-xs -mt-1">We got your cravings covered!</p>
-          </div>
-        </div>
-        <ul className="hidden md:flex gap-6 text-[#5d4037] text-xs font-medium items-center">
-          <li><Link href="/" className="hover:text-[#4caf50]">HOME</Link></li>
-          <li><Link href="/menu" className="hover:text-[#4caf50]">MENU</Link></li>
-          <li><Link href="/story" className="hover:text-[#4caf50]">OUR STORY</Link></li>
-          <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
-          {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
-
-          {/* CART */}
-          <li>
-            <button onClick={() => setShowCart(true)} className="relative">
-              <span className="text-2xl">🛒</span>
-              {totalItems > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#f57c00] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {totalItems}
-                </span>
-              )}
-            </button>
-          </li>
-
-          {/* LOGIN or PROFILE */}
-          {!isLoggedIn ? (
-            <li>
-              <Link href="/login" className="font-semibold text-[#4caf50] hover:text-[#388e3c]">LOGIN</Link>
-            </li>
-          ) : (
-            <li className="relative" ref={profileRef}>
-              <button
-                onClick={() => setShowProfile(!showProfile)}
-                className="flex items-center gap-2 bg-[#DDF8B1] hover:bg-[#c5e8a0] px-4 py-2 rounded-full transition"
-              >
-                <div className="w-7 h-7 rounded-full bg-[#1b5e20] flex items-center justify-center text-white text-xs font-bold">
-                  {userName.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-semibold text-[#1b5e20]">{userName}</span>
-              </button>
-              {showProfile && (
-                <div className="absolute right-0 mt-2 w-44 bg-white border border-[#ffe082] rounded-xl shadow-lg py-2 z-[200]">
-                  <p className="px-4 py-2 text-xs text-[#a1887f] border-b border-[#ffe082]">{userName}</p>
-                  <Link href="/profile" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">Profile</Link>
-                  <Link href="/orders" className="block px-4 py-2 text-sm text-[#5d4037] hover:bg-[#DDF8B1] transition">My Orders</Link>
-                  <Link href="/messages" className="flex items-center px-4 py-2 text-sm text-[#5d4037] transition hover:bg-[#DDF8B1]">
-                    Messages
-                    <MessageNotificationBadge userId={userId} />
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
-                  >
-                    Log Out
-                  </button>
-                </div>
-              )}
-            </li>
-          )}
-        </ul>
-      </nav>
+      <SiteHeader />
 
       {/* HEADER */}
       <section className="bg-[#DDF8B1] pt-32 md:pt-40 pb-6 px-6">
@@ -396,11 +308,6 @@ export default function MenuPage() {
       {/* MENU LAYOUT */}
       <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
           <section className="min-w-0">
-          {!storeStatus.isOpen && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
-              {storeStatus.message || "Store is closed right now. Please check again later."}
-            </div>
-          )}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-bold text-[#1b5e20]">{activeCategory}</h3>
@@ -435,7 +342,7 @@ export default function MenuPage() {
                   </button>
                 ) : DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); if (!storeStatus.isOpen) { setMenuError(storeStatus.message || "Store is closed right now."); return; } setSelectedItem(item); setModalQty(1); setModalSize(getSizes(item.category)[0].label); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalQty(1); setModalAddonQuantities({}); setModalSize(getSizes(item.category)[0].label); }}
                     className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
                   >
                     {getTotalQtyByName(item.name) > 0 ? `In Cart (${getTotalQtyByName(item.name)}) - Add More` : "Add to Cart"}
@@ -470,7 +377,11 @@ export default function MenuPage() {
         const hasSize = hasSizes(selectedItem.category);
         const basePrice = parseFloat(selectedItem.price.replace("P", ""));
         const sizeExtra = hasSize ? (itemSizes.find((s) => s.label === modalSize)?.extra ?? 0) : 0;
-        const computedPrice = basePrice + sizeExtra;
+        const selectedAddons = (selectedItem.addons ?? [])
+          .map((addon) => ({ ...addon, quantity: modalAddonQuantities[addon.id] ?? 0 }))
+          .filter((addon) => addon.quantity > 0);
+        const addonTotal = selectedAddons.reduce((sum, addon) => sum + addon.priceDelta * Number(addon.quantity ?? 0), 0);
+        const computedPrice = basePrice + sizeExtra + addonTotal;
         return (
           <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={closeModal}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -506,14 +417,48 @@ export default function MenuPage() {
                   </div>
                 )}
 
+                {(selectedItem.addons ?? []).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-[#5d4037] mb-2">Add-ons</p>
+                    <div className="space-y-2">
+                      {selectedItem.addons?.map((addon) => {
+                        const addonQty = modalAddonQuantities[addon.id] ?? 0;
+                        return (
+                          <div key={addon.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e0e0e0] px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold text-[#5d4037]">{addon.name}</p>
+                              <p className="text-[10px] text-[#2e7d32]">+P{addon.priceDelta.toFixed(2)} each</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setModalAddonQuantities((previous) => ({ ...previous, [addon.id]: Math.max(0, addonQty - 1) }))}
+                                className="w-7 h-7 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center"
+                              >
+                                -
+                              </button>
+                              <span className="w-6 text-center text-sm font-bold text-[#1b5e20]">{addonQty}</span>
+                              <button
+                                onClick={() => setModalAddonQuantities((previous) => ({ ...previous, [addon.id]: addonQty + 1 }))}
+                                className="w-7 h-7 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-center gap-4 mb-4">
                   <button onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-xl flex items-center justify-center">-</button>
                   <span className="text-xl font-bold text-[#1b5e20] w-8 text-center">{modalQty}</span>
                   <button onClick={() => setModalQty((q) => q + 1)} className="w-9 h-9 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-xl flex items-center justify-center">+</button>
                 </div>
                 <button
-                  onClick={() => { handleAddToCart(selectedItem, modalQty, hasSize ? modalSize : undefined); closeModal(); }}
-                  disabled={!storeStatus.isOpen}
+                  onClick={() => { handleAddToCart(selectedItem, modalQty, hasSize ? modalSize : undefined, selectedAddons); closeModal(); }}
+                  disabled={false}
                   className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
                   Add to Cart - P{(computedPrice * modalQty).toFixed(2)}
@@ -538,18 +483,23 @@ export default function MenuPage() {
               <>
                 <ul className="space-y-3 max-h-64 overflow-y-auto mb-4">
                   {cart.map((c) => (
-                    <li key={cartKey(c.name, c.size)} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-[#ffe082]">
+                    <li key={cartKey(c.name, c.size, c.addons)} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-[#ffe082]">
                       <div className="relative w-12 h-12 flex-shrink-0">
                         <Image src={c.image} alt={c.name} fill className="object-contain" />
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-[#5d4037]">{c.name}{c.size && <span className="ml-1 text-xs text-[#4caf50] font-bold">({c.size})</span>}</p>
+                        {(c.addons ?? []).length > 0 && (
+                          <p className="text-[11px] text-[#a1887f]">
+                            {(c.addons ?? []).map((addon) => `+ ${addon.name} x${addon.quantity ?? 1}`).join(", ")}
+                          </p>
+                        )}
                         <p className="text-xs text-[#2e7d32] font-bold">P{(c.finalPrice * c.quantity).toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleDecrement(c.name, c.size)} className="w-6 h-6 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center">-</button>
+                        <button onClick={() => handleDecrement(c.name, c.size, c.addons)} className="w-6 h-6 rounded-full bg-[#f57c00] hover:bg-[#ef6c00] text-white font-bold text-sm flex items-center justify-center">-</button>
                         <span className="text-sm font-bold text-[#1b5e20] w-5 text-center">{c.quantity}</span>
-                        <button onClick={() => handleAddToCart(c, 1, c.size)} className="w-6 h-6 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center">+</button>
+                        <button onClick={() => handleAddToCart(c, 1, c.size, c.addons ?? [])} className="w-6 h-6 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center">+</button>
                       </div>
                     </li>
                   ))}
@@ -560,10 +510,10 @@ export default function MenuPage() {
                 </div>
                 <button
                   onClick={openCheckout}
-                  disabled={!storeStatus.isOpen}
+                  disabled={false}
                   className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
-                  {storeStatus.isOpen ? "Proceed to Checkout" : "Store Closed"}
+                  Proceed to Checkout
                 </button>
               </>
             )}
@@ -639,7 +589,7 @@ export default function MenuPage() {
                       onClick={() => setCheckoutInfo((p) => ({
                         ...p,
                         deliveryOption: option,
-                        deliveryFee: option === "Pickup" ? 0 : DELIVERY_BASE_FEE,
+                        deliveryFee: option === "Pickup" ? 0 : DEFAULT_DELIVERY_FEE,
                       }))}
                       className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition ${
                         checkoutInfo.deliveryOption === option
@@ -724,6 +674,22 @@ export default function MenuPage() {
             </div>
 
             <div className="mb-4 bg-white rounded-xl px-4 py-3 border border-[#ffe082] space-y-1">
+              {cart.some((item) => (item.addons ?? []).length > 0) && (
+                <div className="mb-2 space-y-1 border-b border-[#ffe082] pb-2">
+                  {cart.flatMap((item) =>
+                    (item.addons ?? []).map((addon) => (
+                      <div key={`${cartKey(item.name, item.size, item.addons)}-${addon.id}`} className="flex justify-between gap-3">
+                        <span className="text-[11px] text-[#a1887f]">
+                          {item.name}: + {addon.name} x{addon.quantity ?? 1}
+                        </span>
+                        <span className="text-[11px] font-bold text-[#1b5e20]">
+                          P{(addon.priceDelta * Number(addon.quantity ?? 1) * item.quantity).toFixed(2)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-xs text-[#a1887f]">Subtotal ({totalItems} item{totalItems !== 1 ? "s" : ""})</span>
                 <span className="text-xs font-bold text-[#1b5e20]">P{subtotalPrice.toFixed(2)}</span>
@@ -737,7 +703,7 @@ export default function MenuPage() {
                 <span className="text-sm font-bold text-[#1b5e20]">P{totalPrice.toFixed(2)}</span>
               </div>
             </div>
-              {isUploadingPaymentProof ? "Uploading proof..." : `Place Order · P${totalPrice.toFixed(2)}`}
+              {isUploadingPaymentProof ? "Uploading proof..." : `Place Order Â· P${totalPrice.toFixed(2)}`}
             <button
               disabled={
                 Boolean(checkoutMissingReason) || isPlacingOrder || isUploadingPaymentProof
@@ -811,4 +777,5 @@ function PaymentProofUpload({
     </div>
   );
 }
+
 

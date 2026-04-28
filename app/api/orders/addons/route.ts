@@ -8,6 +8,7 @@ type AddonPayload = {
   name: string;
   priceDelta: number;
   quantityRequired?: number;
+  quantity?: number;
 };
 
 type OrderItemPayload = {
@@ -97,6 +98,52 @@ export async function POST(request: Request) {
 
     if (existingAddonsError) throw existingAddonsError;
 
+    const inventoryIds = Array.from(new Set(
+      itemsWithAddons.flatMap((item) =>
+        (item.addons ?? [])
+          .map((addon) => addon.inventoryItemId)
+          .filter((id): id is string => Boolean(id))
+      )
+    ));
+    const inventoryById = new Map<string, { id: string; name: string; quantity: number }>();
+
+    if (inventoryIds.length > 0) {
+      const { data: inventoryRows, error: inventoryError } = await serviceSupabase
+        .from("inventory_items")
+        .select("id, name, quantity")
+        .in("id", inventoryIds);
+
+      if (inventoryError) throw inventoryError;
+      inventoryRows?.forEach((row) => {
+        inventoryById.set(row.id, { id: row.id, name: row.name, quantity: Number(row.quantity) });
+      });
+    }
+
+    const stockUseByInventoryId = new Map<string, number>();
+    itemsWithAddons.forEach((item) => {
+      (item.addons ?? []).forEach((addon) => {
+        if (!addon.inventoryItemId) return;
+        const addonQty = Math.max(1, Number(addon.quantity ?? 1));
+        const itemQty = Math.max(1, Number(item.quantity || 1));
+        const requiredPerAddon = Math.max(1, Number(addon.quantityRequired ?? 1));
+        const totalStockUse = addonQty * itemQty * requiredPerAddon;
+        stockUseByInventoryId.set(addon.inventoryItemId, (stockUseByInventoryId.get(addon.inventoryItemId) ?? 0) + totalStockUse);
+      });
+    });
+
+    for (const [inventoryId, requiredQuantity] of stockUseByInventoryId) {
+      const inventoryItem = inventoryById.get(inventoryId);
+      if (!inventoryItem) {
+        return NextResponse.json({ error: "Selected add-on inventory item was not found." }, { status: 400 });
+      }
+      if (inventoryItem.quantity < requiredQuantity) {
+        return NextResponse.json(
+          { error: `${inventoryItem.name} stock is not enough. Available: ${inventoryItem.quantity}, needed: ${requiredQuantity}.` },
+          { status: 400 }
+        );
+      }
+    }
+
     const usedOrderItemIds = new Set<string>();
     const existingKeys = new Set(
       (existingAddons ?? []).map((addon) =>
@@ -122,7 +169,8 @@ export async function POST(request: Request) {
           inventory_item_id: addon.inventoryItemId || null,
           addon_name: addon.name.trim(),
           price_delta: Number(addon.priceDelta ?? 0),
-          quantity: Math.max(1, Number(item.quantity || 1)),
+          quantity: Math.max(1, Number(addon.quantity ?? 1)) * Math.max(1, Number(item.quantity || 1)),
+          total_price: Number(addon.priceDelta ?? 0) * Math.max(1, Number(addon.quantity ?? 1)) * Math.max(1, Number(item.quantity || 1)),
         }));
     });
 
@@ -132,6 +180,17 @@ export async function POST(request: Request) {
 
     const { error: insertError } = await serviceSupabase.from("order_addons").insert(addonsToInsert);
     if (insertError) throw insertError;
+
+    for (const [inventoryId, requiredQuantity] of stockUseByInventoryId) {
+      const inventoryItem = inventoryById.get(inventoryId);
+      if (!inventoryItem) continue;
+      const { error: stockUpdateError } = await serviceSupabase
+        .from("inventory_items")
+        .update({ quantity: inventoryItem.quantity - requiredQuantity })
+        .eq("id", inventoryId);
+
+      if (stockUpdateError) throw stockUpdateError;
+    }
 
     return NextResponse.json({ inserted: addonsToInsert.length });
   } catch (error) {

@@ -18,16 +18,13 @@ import {
   getMenuAddons,
   getMenuItems,
   getMenuRequirements,
-  getStoreStatus,
   getCurrentAppUserRole,
   markContactMessageRead,
   replyToContactMessage,
   uploadMenuItemImage,
   updateMenuItem,
-  updateStoreStatus,
   upsertInventoryItem,
   type InventoryRow,
-  type StoreStatus,
 } from "@/lib/supabase/data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
@@ -104,7 +101,6 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [contactMessages, setContactMessages] = useState<AdminMessage[]>([]);
   const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof getAdminMetrics>> | null>(null);
-  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "" });
   const [editingMenuId, setEditingMenuId] = useState("");
   const [editingInventoryId, setEditingInventoryId] = useState("");
   const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
@@ -126,14 +122,13 @@ export default function AdminPage() {
   const unreadMessages = useMemo(() => contactMessages.filter((item) => item.status === "Unread").length, [contactMessages]);
 
   const loadAdminData = async () => {
-    const [menuRows, inventoryRows, requirementRows, addonRows, orderRows, metricRows, storeRows, messageRows] = await Promise.all([
+    const [menuRows, inventoryRows, requirementRows, addonRows, orderRows, metricRows, messageRows] = await Promise.all([
       getMenuItems(),
       getInventoryItems(),
       getMenuRequirements(),
       getMenuAddons(),
       getAdminOrders(),
       getAdminMetrics(),
-      getStoreStatus(),
       getAdminContactMessages(),
     ]);
 
@@ -143,18 +138,7 @@ export default function AdminPage() {
     setAddons(addonRows);
     setOrders(orderRows);
     setMetrics(metricRows);
-    setStoreStatus(storeRows);
     setContactMessages(messageRows);
-  };
-
-  const saveStoreStatus = async (nextStatus: StoreStatus) => {
-    try {
-      setMessage("");
-      const savedStatus = await updateStoreStatus(nextStatus);
-      setStoreStatus(savedStatus);
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Unable to update store status.");
-    }
   };
 
   useEffect(() => {
@@ -404,7 +388,6 @@ export default function AdminPage() {
 
             {activeTab === "dashboard" && (
               <section className="space-y-5">
-                <StoreStatusPanel storeStatus={storeStatus} onSave={saveStoreStatus} />
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                   <Stat label="Menu Items" value={metrics?.totalMenuItems ?? menuItems.length} />
                   <Stat label="Orders" value={metrics?.totalOrders ?? orders.length} />
@@ -662,7 +645,27 @@ export default function AdminPage() {
                   <p className="font-bold text-[#174b21]">{order.customer_name ?? "Customer"}</p>
                   <p className="mt-1 text-xs text-[#6f625a]">{order.phone}</p>
                 </div>,
-                `${new Date(order.created_at).toLocaleString("en-PH")} | ${order.order_items?.length ?? 0} item(s)`,
+                <div key={`${order.id}-items`} className="min-w-[190px]">
+                  <p>{new Date(order.created_at).toLocaleString("en-PH")} | {order.order_items?.length ?? 0} item(s)</p>
+                  <div className="mt-1 space-y-0.5">
+                    {((order.order_items ?? []) as unknown as Array<{
+                      id: string;
+                      quantity: number;
+                      item_name: string;
+                      size_label: string | null;
+                      order_addons?: Array<{ id: string; addon_name: string; quantity: number }>;
+                    }>).slice(0, 3).map((item) => (
+                      <div key={item.id} className="text-xs text-[#6f625a]">
+                        <p>{item.quantity}x {item.item_name}{item.size_label ? ` (${item.size_label})` : ""}</p>
+                        {(item.order_addons ?? []).map((addon) => (
+                          <p key={addon.id} className="pl-2 text-[#8a7a70]">
+                            + {addon.addon_name} x{addon.quantity}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>,
                 `P${Number(order.total_amount).toFixed(2)}`,
                 <div key={`${order.id}-payment`} className="min-w-[180px]">
                   <p>{order.payment_method}{order.selected_bank ? ` - ${order.selected_bank}` : ""}</p>
@@ -959,47 +962,6 @@ function InventoryAlerts({ lowStockItems, unavailableMenuItems }: { lowStockItem
         )}
       </Panel>
     </div>
-  );
-}
-
-function StoreStatusPanel({ storeStatus, onSave }: { storeStatus: StoreStatus; onSave: (status: StoreStatus) => Promise<void> }) {
-  const [message, setMessage] = useState(storeStatus.message);
-  const displayMessage = storeStatus.message || (storeStatus.isOpen ? "No customer notice is shown while the store is open." : "Store is closed right now. Please check again later.");
-
-  return (
-    <section className="rounded-lg border border-[#d8e5cc] bg-white p-4 shadow-sm">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <p className="text-xs font-bold uppercase text-[#5f8f49]">Store Status</p>
-          <h2 className="mt-1 text-lg font-bold text-[#174b21]">{storeStatus.isOpen ? "Open for orders" : "Closed for orders"}</h2>
-          <p className="text-sm text-[#6f625a]">{displayMessage}</p>
-        </div>
-        <button
-          onClick={() => void onSave({
-            ...storeStatus,
-            isOpen: !storeStatus.isOpen,
-            message: !storeStatus.isOpen ? "" : (storeStatus.message || "Store is closed right now. Please check again later."),
-          })}
-          className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow-sm transition ${storeStatus.isOpen ? "bg-red-600 hover:bg-red-700" : "bg-[#246b2d] hover:bg-[#1b5e20]"}`}
-        >
-          {storeStatus.isOpen ? "Close Store" : "Open Store"}
-        </button>
-      </div>
-      <div className="mt-3 flex flex-col gap-2 md:flex-row">
-        <input
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          placeholder="Optional message shown only when store is closed"
-          className="flex-1 rounded-lg border border-[#cbdcbe] bg-[#fbfdf8] px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:bg-white focus:ring-2 focus:ring-[#cfe8bc]"
-        />
-        <button
-          onClick={() => void onSave({ ...storeStatus, message: message.trim() })}
-          className="rounded-lg border border-[#cbdcbe] bg-white px-4 py-2 text-sm font-bold text-[#174b21] transition hover:bg-[#edf5e5]"
-        >
-          Save Message
-        </button>
-      </div>
-    </section>
   );
 }
 
