@@ -7,10 +7,13 @@ import { useRouter } from "next/navigation";
 import MessageNotificationBadge from "@/components/message-notification-badge";
 import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
 
+const CART_COUNT_STORAGE_KEY = "indabest_cart_count";
+
 export default function SiteHeader() {
   const router = useRouter();
   const { isLoggedIn, userId, userName, userEmail, avatarUrl } = useAuthProfile();
   const [showProfile, setShowProfile] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const profileRef = useRef<HTMLLIElement>(null);
   const displayName = userName || userEmail || "Profile";
   const initial = displayName.charAt(0).toUpperCase();
@@ -26,10 +29,41 @@ export default function SiteHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const readCartCount = () => {
+      const nextCount = Number(window.localStorage.getItem(CART_COUNT_STORAGE_KEY) || "0");
+      setCartCount(Number.isFinite(nextCount) ? Math.max(0, nextCount) : 0);
+    };
+
+    const handleCartCountChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ count?: number }>;
+      if (typeof customEvent.detail?.count === "number") {
+        setCartCount(Math.max(0, customEvent.detail.count));
+        return;
+      }
+      readCartCount();
+    };
+
+    readCartCount();
+    window.addEventListener("indabest:cart-count-changed", handleCartCountChange);
+    window.addEventListener("storage", readCartCount);
+    return () => {
+      window.removeEventListener("indabest:cart-count-changed", handleCartCountChange);
+      window.removeEventListener("storage", readCartCount);
+    };
+  }, []);
+
   const handleLogout = async () => {
     await signOutUser();
     setShowProfile(false);
     router.push("/");
+  };
+
+  const handleCartClick = () => {
+    window.localStorage.setItem(CART_COUNT_STORAGE_KEY, "0");
+    setCartCount(0);
+    window.dispatchEvent(new CustomEvent("indabest:cart-count-changed", { detail: { count: 0 } }));
+    window.dispatchEvent(new Event("indabest:open-cart"));
   };
 
   return (
@@ -51,15 +85,20 @@ export default function SiteHeader() {
         <li>
           <Link
             href="/menu?cart=open"
-            onClick={() => window.dispatchEvent(new Event("indabest:open-cart"))}
+            onClick={handleCartClick}
             aria-label="Open cart"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF8B1] text-[#1b5e20] transition hover:bg-[#c5e8a0]"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF8B1] text-[#1b5e20] transition hover:bg-[#c5e8a0]"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="9" cy="21" r="1" />
               <circle cx="20" cy="21" r="1" />
               <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L23 6H6" />
             </svg>
+            {cartCount > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f57c00] px-1 text-[11px] font-bold leading-none text-white shadow-sm">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
         </li>
 
