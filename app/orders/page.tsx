@@ -11,7 +11,14 @@ import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
 import { getMyOrders } from "@/lib/supabase/data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type OrderItem = { name: string; image: string; quantity: number; size?: string; finalPrice: number };
+type OrderItem = {
+  name: string;
+  image: string;
+  quantity: number;
+  size?: string;
+  finalPrice: number;
+  addons?: { name: string; quantity: number; priceDelta: number }[];
+};
 type Order = {
   id: string;
   date: string;
@@ -232,6 +239,16 @@ export default function OrdersPage() {
                           {item.size && <span className="ml-1 text-xs text-[#4caf50] font-bold">({item.size})</span>}
                         </p>
                         <p className="text-xs text-[#a1887f]">x{item.quantity}</p>
+                        {(item.addons ?? []).length > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            {item.addons?.map((addon, addonIndex) => (
+                              <p key={`${addon.name}-${addonIndex}`} className="text-[11px] text-[#a1887f]">
+                                + {addon.name} x{addon.quantity}
+                                {addon.priceDelta > 0 ? ` · P${(addon.priceDelta * addon.quantity).toFixed(2)}` : ""}
+                              </p>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <p className="text-sm font-bold text-[#2e7d32]">P{(item.finalPrice * item.quantity).toFixed(2)}</p>
                     </li>

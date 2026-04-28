@@ -214,13 +214,25 @@ export default function MenuPage() {
     if (!item.isAvailable) return;
     const basePrice = parseFloat(item.price.replace("P", ""));
     const sizes = getSizes(item.category);
-    const sizeExtra = size ? (sizes.find((s) => s.label === size)?.extra ?? 0) : 0;
+    const selectedSize = size ? sizes.find((s) => s.label === size) : undefined;
+    const sizeExtra = selectedSize?.extra ?? 0;
+    const sizeAddon = selectedSize && selectedSize.extra > 0 && selectedSize.label.toLowerCase().includes("add")
+      ? [{
+          id: `size-addon-${selectedSize.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          inventoryItemId: "",
+          name: selectedSize.label,
+          priceDelta: selectedSize.extra,
+          quantityRequired: 1,
+          isAvailable: true,
+        }]
+      : [];
+    const cartAddons = [...(item.addons ?? []), ...sizeAddon];
     const finalPrice = basePrice + sizeExtra;
     const key = cartKey(item.name, size);
     setCart((prev) => {
       const existing = prev.find((c) => cartKey(c.name, c.size) === key);
       if (existing) return prev.map((c) => cartKey(c.name, c.size) === key ? { ...c, quantity: c.quantity + qty } : c);
-      return [...prev, { ...item, quantity: qty, size, finalPrice }];
+      return [...prev, { ...item, addons: cartAddons, quantity: qty, size, finalPrice }];
     });
   };
 

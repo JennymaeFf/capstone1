@@ -61,3 +61,25 @@ drop policy if exists "Admins can insert app settings" on public.app_settings;
 create policy "Admins can insert app settings"
 on public.app_settings for insert
 with check (public.is_admin());
+
+-- Allow customers to save add-ons connected to their own order items.
+-- Safe to run even if order_addons is not created in this setup file yet.
+do $$
+begin
+  if to_regclass('public.order_addons') is not null then
+    execute 'drop policy if exists "Users can insert own order addons" on public.order_addons';
+    execute '
+      create policy "Users can insert own order addons"
+      on public.order_addons for insert
+      with check (
+        exists (
+          select 1
+          from public.order_items oi
+          join public.orders o on o.id = oi.order_id
+          where oi.id = order_addons.order_item_id
+            and o.user_id = auth.uid()
+        )
+      )
+    ';
+  end if;
+end $$;

@@ -59,6 +59,12 @@ export type CartItemForOrder = {
   addons?: MenuAddonOption[];
 };
 
+type OrderAddonForDisplay = {
+  name: string;
+  quantity: number;
+  priceDelta: number;
+};
+
 export type OrderWithItems = {
   id: string;
   date: string;
@@ -78,7 +84,7 @@ export type OrderWithItems = {
     paymentReference?: string;
     paymentProofUrl?: string;
   };
-  items: { name: string; image: string; quantity: number; size?: string; finalPrice: number }[];
+  items: { name: string; image: string; quantity: number; size?: string; finalPrice: number; addons?: OrderAddonForDisplay[] }[];
 };
 
 export type StoreStatus = {
@@ -558,6 +564,45 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
     throw new Error("Please upload your payment proof.");
   }
 
+  const syncOrderAddons = async (orderId: string) => {
+    const cartItemsWithAddons = args.cart.filter((item) => (item.addons ?? []).length > 0);
+    if (cartItemsWithAddons.length === 0) return;
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) {
+      throw new Error("Unable to save order add-ons because your session expired.");
+    }
+
+    const response = await fetch("/api/orders/addons", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+      },
+      body: JSON.stringify({
+        orderId,
+        items: cartItemsWithAddons.map((item) => ({
+          menuItemId: item.id ?? null,
+          itemName: item.name,
+          size: item.size ?? null,
+          quantity: item.quantity,
+          addons: (item.addons ?? []).map((addon) => ({
+            inventoryItemId: addon.inventoryItemId,
+            name: addon.name,
+            priceDelta: addon.priceDelta,
+            quantityRequired: addon.quantityRequired,
+          })),
+        })),
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      console.error("[orders/addons] Unable to save add-ons", result);
+      throw new Error(result.error || "Order was created, but add-ons could not be saved.");
+    }
+  };
+
   const rpcItems = args.cart.map((item) => ({
     menu_item_id: item.id ?? null,
     item_name: item.name,
@@ -589,6 +634,7 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
   });
 
   if (!orderError) {
+    await syncOrderAddons(orderId);
     await upsertMyProfile({
       full_name: args.checkoutInfo.name,
       phone: args.checkoutInfo.phone,
@@ -663,8 +709,10 @@ export async function createOrder(args: { checkoutInfo: CheckoutInfo; cart: Cart
     quantity: item.quantity,
   }));
 
-  const { error: itemsError } = await supabase.from("order_items").insert(itemsPayload);
+  const { error: itemsError } = await supabase.from("order_items").insert(itemsPayload).select("*");
   if (itemsError) throw new Error(itemsError.message || "Supabase could not create order items.");
+
+  await syncOrderAddons(order.id);
 
   await upsertMyProfile({
     full_name: args.checkoutInfo.name,
@@ -690,7 +738,9 @@ export async function getMyOrders() {
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  type OrderWithNestedItems = OrderRow & { order_items: OrderItemRow[] };
+  type OrderAddonRow = Database["public"]["Tables"]["order_addons"]["Row"];
+  type OrderItemWithAddons = OrderItemRow & { order_addons?: OrderAddonRow[] };
+  type OrderWithNestedItems = OrderRow & { order_items: OrderItemWithAddons[] };
   return ((data ?? []) as unknown as OrderWithNestedItems[]).map((order) => ({
     id: order.id.slice(-12),
     date: new Date(order.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
@@ -716,6 +766,11 @@ export async function getMyOrders() {
       quantity: item.quantity,
       size: item.size_label ?? undefined,
       finalPrice: Number(item.unit_price),
+      addons: (item.order_addons ?? []).map((addon) => ({
+        name: addon.addon_name,
+        quantity: addon.quantity,
+        priceDelta: Number(addon.price_delta),
+      })),
     })),
   })) as OrderWithItems[];
 }

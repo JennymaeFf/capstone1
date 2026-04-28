@@ -938,6 +938,19 @@ using (
   )
 );
 
+drop policy if exists "Users can insert own order addons" on public.order_addons;
+create policy "Users can insert own order addons"
+on public.order_addons for insert
+with check (
+  exists (
+    select 1
+    from public.order_items oi
+    join public.orders o on o.id = oi.order_id
+    where oi.id = order_addons.order_item_id
+      and o.user_id = auth.uid()
+  )
+);
+
 insert into public.categories (name, icon, display_order)
 values
   ('Lemonade Series', 'lemon', 10),

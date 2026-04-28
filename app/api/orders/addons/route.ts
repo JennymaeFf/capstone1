@@ -1,0 +1,144 @@
+import { NextResponse } from "next/server";
+import { getSupabaseServerClient, getSupabaseServiceClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+
+type AddonPayload = {
+  inventoryItemId?: string | null;
+  name: string;
+  priceDelta: number;
+  quantityRequired?: number;
+};
+
+type OrderItemPayload = {
+  menuItemId?: string | null;
+  itemName: string;
+  size?: string | null;
+  quantity: number;
+  addons?: AddonPayload[];
+};
+
+type ExistingOrderItem = {
+  id: string;
+  menu_item_id: string | null;
+  item_name: string;
+  size_label: string | null;
+};
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function sameOrderItem(payload: OrderItemPayload, row: ExistingOrderItem) {
+  const sameMenuItem = payload.menuItemId ? row.menu_item_id === payload.menuItemId : true;
+  return (
+    sameMenuItem &&
+    normalizeText(payload.itemName) === normalizeText(row.item_name) &&
+    normalizeText(payload.size) === normalizeText(row.size_label)
+  );
+}
+
+export async function POST(request: Request) {
+  try {
+    const authHeader = request.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+    if (!token) {
+      return NextResponse.json({ error: "User session is required." }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const orderId = typeof body.orderId === "string" ? body.orderId : "";
+    const items = Array.isArray(body.items) ? (body.items as OrderItemPayload[]) : [];
+
+    if (!orderId) {
+      return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
+    }
+
+    const itemsWithAddons = items.filter((item) => (item.addons ?? []).length > 0);
+    if (itemsWithAddons.length === 0) {
+      return NextResponse.json({ inserted: 0, message: "No add-ons to save." });
+    }
+
+    const serverSupabase = getSupabaseServerClient();
+    const serviceSupabase = getSupabaseServiceClient();
+    const { data: sessionUser, error: sessionError } = await serverSupabase.auth.getUser(token);
+
+    if (sessionError || !sessionUser.user) {
+      return NextResponse.json({ error: "Invalid user session." }, { status: 401 });
+    }
+
+    const { data: order, error: orderError } = await serviceSupabase
+      .from("orders")
+      .select("id, user_id")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError) throw orderError;
+    if (order.user_id !== sessionUser.user.id) {
+      return NextResponse.json({ error: "You can only update your own order add-ons." }, { status: 403 });
+    }
+
+    const { data: orderItems, error: orderItemsError } = await serviceSupabase
+      .from("order_items")
+      .select("id, menu_item_id, item_name, size_label")
+      .eq("order_id", orderId);
+
+    if (orderItemsError) throw orderItemsError;
+
+    const orderItemRows = (orderItems ?? []) as ExistingOrderItem[];
+    const orderItemIds = orderItemRows.map((item) => item.id);
+    const { data: existingAddons, error: existingAddonsError } = orderItemIds.length
+      ? await serviceSupabase
+          .from("order_addons")
+          .select("order_item_id, inventory_item_id, addon_name")
+          .in("order_item_id", orderItemIds)
+      : { data: [], error: null };
+
+    if (existingAddonsError) throw existingAddonsError;
+
+    const usedOrderItemIds = new Set<string>();
+    const existingKeys = new Set(
+      (existingAddons ?? []).map((addon) =>
+        `${addon.order_item_id}:${addon.inventory_item_id ?? ""}:${normalizeText(addon.addon_name)}`
+      )
+    );
+
+    const addonsToInsert = itemsWithAddons.flatMap((item) => {
+      const matchedOrderItem = orderItemRows.find((row) => !usedOrderItemIds.has(row.id) && sameOrderItem(item, row));
+      if (!matchedOrderItem) return [];
+
+      usedOrderItemIds.add(matchedOrderItem.id);
+      return (item.addons ?? [])
+        .filter((addon) => addon.name?.trim())
+        .filter((addon) => {
+          const key = `${matchedOrderItem.id}:${addon.inventoryItemId ?? ""}:${normalizeText(addon.name)}`;
+          if (existingKeys.has(key)) return false;
+          existingKeys.add(key);
+          return true;
+        })
+        .map((addon) => ({
+          order_item_id: matchedOrderItem.id,
+          inventory_item_id: addon.inventoryItemId || null,
+          addon_name: addon.name.trim(),
+          price_delta: Number(addon.priceDelta ?? 0),
+          quantity: Math.max(1, Number(item.quantity || 1)),
+        }));
+    });
+
+    if (addonsToInsert.length === 0) {
+      return NextResponse.json({ inserted: 0, message: "Order add-ons already saved or no matching order item found." });
+    }
+
+    const { error: insertError } = await serviceSupabase.from("order_addons").insert(addonsToInsert);
+    if (insertError) throw insertError;
+
+    return NextResponse.json({ inserted: addonsToInsert.length });
+  } catch (error) {
+    console.error("[orders/addons]", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to save order add-ons." },
+      { status: 500 }
+    );
+  }
+}
