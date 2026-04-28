@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -41,6 +41,26 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      const accountRole = new URLSearchParams(window.location.search).get("role") === "admin" ? "admin" : "customer";
+
+      if (accountRole === "admin") {
+        const registerResponse = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: fullName, email: emailAddress, password, role: "admin" }),
+        });
+        const registerResult = await registerResponse.json();
+
+        if (!registerResponse.ok) {
+          setError(registerResult.error || "Unable to create admin account.");
+          return;
+        }
+
+        setSuccess("Admin account created! Redirecting to login...");
+        setTimeout(() => router.push("/login"), 1200);
+        return;
+      }
+
       const otpResponse = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -54,30 +74,26 @@ export default function RegisterPage() {
       }
 
       if (otpResult.enabled === false) {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: emailAddress,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-          },
+        const registerResponse = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: fullName, email: emailAddress, password, role: "customer" }),
         });
+        const registerResult = await registerResponse.json();
 
-        if (signUpError) {
-          setError(signUpError.message || "Unable to create account.");
+        if (!registerResponse.ok) {
+          setError(registerResult.error || "Unable to create account.");
           return;
         }
 
-        setSuccess(data.session ? "Account created! Redirecting to login..." : "Account created! Please check your email.");
+        setSuccess("Account created! Redirecting to login...");
         setTimeout(() => router.push("/login"), 1200);
         return;
       }
 
       sessionStorage.setItem(
         "indabest_pending_registration",
-        JSON.stringify({ name: fullName, email: emailAddress, password })
+        JSON.stringify({ name: fullName, email: emailAddress, password, role: "customer" })
       );
       setSuccess("Verification code sent! Redirecting...");
       setTimeout(() => router.push("/check-email"), 700);

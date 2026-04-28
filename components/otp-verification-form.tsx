@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { notifyAuthChange } from "@/components/use-auth-profile";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 type OtpPurpose = "registration" | "login";
 
@@ -12,6 +12,7 @@ type PendingRegistration = {
   name: string;
   email: string;
   password: string;
+  role?: "customer";
 };
 
 type PendingLogin = {
@@ -113,18 +114,21 @@ export default function OtpVerificationForm({ purpose, title, message }: OtpVeri
     if (!raw) throw new Error("No pending registration found. Please register again.");
 
     const pending = JSON.parse(raw) as PendingRegistration;
-    const supabase = getSupabaseBrowserClient();
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: pending.email,
-      password: pending.password,
-      options: {
-        data: {
-          full_name: pending.name,
-        },
-      },
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: pending.name,
+        email: pending.email,
+        password: pending.password,
+        role: "customer",
+      }),
     });
+    const result = await response.json();
 
-    if (signUpError) throw signUpError;
+    if (!response.ok) {
+      throw new Error(result.error || "Unable to create account.");
+    }
 
     sessionStorage.removeItem(storageKeys.registration);
     setSuccess("Account verified! Redirecting to login...");

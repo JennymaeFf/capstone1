@@ -52,6 +52,12 @@ export default function LoginPage() {
       const role = await getCurrentAppUserRole(user?.id, user?.email);
       console.log("[login] Redirect role:", role);
 
+      if (role === "admin") {
+        notifyAuthChange();
+        router.push("/admin/dashboard");
+        return;
+      }
+
       const otpResponse = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,7 +78,7 @@ export default function LoginPage() {
       }
 
       notifyAuthChange();
-      router.push(role === "admin" ? "/admin/dashboard" : "/menu");
+      router.push("/menu");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to log in right now.");
     } finally {
