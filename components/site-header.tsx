@@ -49,8 +49,9 @@ export default function SiteHeader() {
         <li><Link href="/contact" className="hover:text-[#4caf50]">CONTACT US</Link></li>
         {isLoggedIn && <li><Link href="/orders" className="hover:text-[#4caf50]">MY ORDERS</Link></li>}
         <li>
-          <button
-            onClick={() => router.push("/menu?cart=open")}
+          <Link
+            href="/menu?cart=open"
+            onClick={() => window.dispatchEvent(new Event("indabest:open-cart"))}
             aria-label="Open cart"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF8B1] text-[#1b5e20] transition hover:bg-[#c5e8a0]"
           >
@@ -59,7 +60,7 @@ export default function SiteHeader() {
               <circle cx="20" cy="21" r="1" />
               <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L23 6H6" />
             </svg>
-          </button>
+          </Link>
         </li>
 
         {!isLoggedIn ? (

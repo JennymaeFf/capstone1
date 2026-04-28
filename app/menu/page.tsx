@@ -85,6 +85,7 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuError, setMenuError] = useState("");
   const [paymentProofError, setPaymentProofError] = useState("");
+  const [cartNotice, setCartNotice] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
   const router = useRouter();
@@ -107,7 +108,17 @@ export default function MenuPage() {
     if (new URLSearchParams(window.location.search).get("cart") === "open") {
       setShowCart(true);
     }
+
+    const openCart = () => setShowCart(true);
+    window.addEventListener("indabest:open-cart", openCart);
+    return () => window.removeEventListener("indabest:open-cart", openCart);
   }, []);
+
+  useEffect(() => {
+    if (!cartNotice) return;
+    const timeoutId = window.setTimeout(() => setCartNotice(""), 2500);
+    return () => window.clearTimeout(timeoutId);
+  }, [cartNotice]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -226,6 +237,7 @@ export default function MenuPage() {
       if (existing) return prev.map((c) => cartKey(c.name, c.size, c.addons) === key ? { ...c, quantity: c.quantity + qty } : c);
       return [...prev, { ...item, addons: cartAddons, quantity: qty, size, finalPrice }];
     });
+    setCartNotice("Added to cart!");
   };
 
   const handleDecrement = (name: string, size?: string, addons?: MenuAddonOption[]) => {
@@ -292,6 +304,12 @@ export default function MenuPage() {
     <div className="min-h-screen bg-[#DDF8B1] font-sans">
 
       <SiteHeader />
+
+      {cartNotice && (
+        <div className="fixed right-5 top-28 z-[180] rounded-xl border border-[#ffe082] bg-[#FFF6DE] px-5 py-3 text-sm font-bold text-[#1b5e20] shadow-lg">
+          {cartNotice}
+        </div>
+      )}
 
       {/* HEADER */}
       <section className="bg-[#DDF8B1] pt-32 md:pt-40 pb-6 px-6">
