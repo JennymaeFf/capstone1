@@ -8,6 +8,7 @@ import MessageNotificationBadge from "@/components/message-notification-badge";
 import { signOutUser, useAuthProfile } from "@/components/use-auth-profile";
 
 const CART_COUNT_STORAGE_KEY = "indabest_cart_count";
+const CART_STORAGE_KEY = "indabest_cart";
 
 export default function SiteHeader() {
   const router = useRouter();
@@ -54,6 +55,12 @@ export default function SiteHeader() {
   }, []);
 
   const handleLogout = async () => {
+    window.localStorage.removeItem(CART_STORAGE_KEY);
+    window.localStorage.removeItem(CART_COUNT_STORAGE_KEY);
+    window.localStorage.removeItem("cart");
+    setCartCount(0);
+    window.dispatchEvent(new CustomEvent("indabest:cart-count-changed", { detail: { count: 0 } }));
+    window.dispatchEvent(new Event("indabest:cart-cleared"));
     await signOutUser();
     setShowProfile(false);
     router.push("/");

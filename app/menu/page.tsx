@@ -233,8 +233,17 @@ export default function MenuPage() {
       setShowCart(true);
       updateNavbarCartCount(0);
     };
+    const clearCart = () => {
+      setCart([]);
+      setShowCart(false);
+      setShowCheckout(false);
+    };
     window.addEventListener("indabest:open-cart", openCart);
-    return () => window.removeEventListener("indabest:open-cart", openCart);
+    window.addEventListener("indabest:cart-cleared", clearCart);
+    return () => {
+      window.removeEventListener("indabest:open-cart", openCart);
+      window.removeEventListener("indabest:cart-cleared", clearCart);
+    };
   }, []);
 
   useEffect(() => {
