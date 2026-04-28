@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { sendOrderStatusEmail } from "@/lib/email/order-status";
 import { getSupabaseServerClient, getSupabaseServiceClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 const EMAIL_STATUSES = new Set(["Shipped", "On the way", "Delivered", "Completed"]);
 
 type OrderItemForEmail = {

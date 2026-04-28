@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 
 type OrderStatusEmailItem = {
   name: string;
@@ -56,10 +57,32 @@ function getStatusMessage(status: string) {
 
 function getRequiredEnv(name: string) {
   const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing ${name} in .env.local`);
+  if (!value?.trim()) {
+    throw new Error(`Missing ${name} environment variable`);
   }
-  return value;
+  return value.trim();
+}
+
+function getBooleanEnv(name: string, fallback: boolean) {
+  const value = process.env[name];
+  if (value === undefined) return fallback;
+  return value.toLowerCase() === "true";
+}
+
+function getOrderMailerConfig() {
+  const host = (process.env.OTP_SMTP_HOST || "smtp.gmail.com").trim();
+  const port = Number(process.env.OTP_SMTP_PORT || 587);
+  const user = (process.env.EMAIL_USER || process.env.GMAIL_USER || getRequiredEnv("EMAIL_USER")).trim();
+  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || getRequiredEnv("EMAIL_PASS");
+  const from = (process.env.OTP_SENDER_EMAIL || user).trim();
+  const secure = port === 465;
+  const requireTLS = getBooleanEnv("OTP_SMTP_TLS", true);
+
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error(`Invalid OTP_SMTP_PORT value: ${process.env.OTP_SMTP_PORT}`);
+  }
+
+  return { host, port, user, pass, from, secure, requireTLS };
 }
 
 export async function sendOrderStatusEmail({
@@ -72,12 +95,7 @@ export async function sendOrderStatusEmail({
   deliveryAddress,
   rider,
 }: SendOrderStatusEmailParams) {
-  const host = process.env.OTP_SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.OTP_SMTP_PORT || 587);
-  const secure = port === 465;
-  const user = process.env.EMAIL_USER || process.env.GMAIL_USER || getRequiredEnv("GMAIL_USER");
-  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || getRequiredEnv("GMAIL_APP_PASSWORD");
-  const from = process.env.OTP_SENDER_EMAIL || user;
+  const config = getOrderMailerConfig();
   const safeStatus = escapeHtml(status);
   const safeCustomerName = escapeHtml(customerName || "Customer");
   const safeOrderNumber = escapeHtml(orderNumber);
@@ -183,16 +201,21 @@ export async function sendOrderStatusEmail({
     "Thank you for ordering from Indabest Crave Corner.",
   ].filter(Boolean).join("\n");
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-    requireTLS: process.env.OTP_SMTP_TLS !== "false",
-  });
+  const transportOptions: SMTPTransport.Options = {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: { user: config.user, pass: config.pass },
+    requireTLS: config.requireTLS,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  };
+
+  const transporter = nodemailer.createTransport(transportOptions);
 
   await transporter.sendMail({
-    from: `"Indabest Crave Corner" <${from}>`,
+    from: `"Indabest Crave Corner" <${config.from}>`,
     to,
     subject: `Order #${orderNumber} is ${status}`,
     text,
