@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { createOtp, getCooldownSeconds, type OtpPurpose } from "@/lib/otp/store";
-import { sendOtpEmail } from "@/lib/otp/mailer";
+import { getOtpMailerDiagnostics, sendOtpEmail } from "@/lib/otp/mailer";
+
+export const runtime = "nodejs";
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "Unknown error";
+}
+
+function getSafeOtpSendError(error: unknown) {
+  const message = getErrorMessage(error);
+  return message
+    .replace(/pass(word)?=[^&\s]+/gi, "password=[hidden]")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [hidden]");
+}
 
 function isPurpose(value: unknown): value is OtpPurpose {
   return value === "registration" || value === "login";
@@ -21,6 +36,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Valid email and purpose are required." }, { status: 400 });
     }
 
+    console.log("[otp/send] Request received", {
+      email,
+      purpose,
+      mailer: getOtpMailerDiagnostics(),
+      hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    });
+
     if (!isOtpEnabled(purpose)) {
       return NextResponse.json({ enabled: false });
     }
@@ -36,9 +59,14 @@ export async function POST(request: Request) {
     const code = await createOtp(email, purpose);
     await sendOtpEmail({ email, code, purpose });
 
+    console.log("[otp/send] OTP email sent", { email, purpose });
     return NextResponse.json({ enabled: true, message: "OTP sent." });
   } catch (error) {
-    console.error("[otp/send]", error);
-    return NextResponse.json({ error: "Unable to send OTP right now." }, { status: 500 });
+    const safeError = getSafeOtpSendError(error);
+    console.error("[otp/send] failed", {
+      error: safeError,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json({ error: `Unable to send OTP: ${safeError}` }, { status: 500 });
   }
 }
