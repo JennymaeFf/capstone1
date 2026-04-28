@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -267,18 +267,18 @@ export default function MenuPage() {
   };
 
   const categories = [
-    { label: "All", icon: "ðŸ½ï¸" },
-    { label: "Lemonade Series", icon: "ðŸ‹" },
-    { label: "Float Series", icon: "ðŸ¥¤" },
-    { label: "Macchiato", icon: "â˜•" },
-    { label: "Zagu Delight", icon: "ðŸ§‹" },
-    { label: "Pizza", icon: "ðŸ•" },
-    { label: "Silog Combo Meals", icon: "ðŸ³" },
-    { label: "Bites Express", icon: "ðŸ¢" },
-    { label: "Extras", icon: "ðŸš" },
-    { label: "Add-ons", icon: "+" },
-    { label: "Siopao", icon: "ðŸ¥Ÿ" },
-    { label: "Beers", icon: "ðŸº" },
+    { label: "All", icon: "🍽️" },
+    { label: "Lemonade Series", icon: "🍋" },
+    { label: "Float Series", icon: "🥤" },
+    { label: "Macchiato", icon: "☕" },
+    { label: "Zagu Delight", icon: "🧋" },
+    { label: "Pizza", icon: "🍕" },
+    { label: "Silog Combo Meals", icon: "🍳" },
+    { label: "Bites Express", icon: "🍢" },
+    { label: "Extras", icon: "🍚" },
+    { label: "Add-ons", icon: "➕" },
+    { label: "Siopao", icon: "🥟" },
+    { label: "Beers", icon: "🍺" },
   ];
 
   const filteredItems = activeCategory === "All"
