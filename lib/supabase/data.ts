@@ -33,6 +33,7 @@ export type MenuAddonOption = {
   priceDelta: number;
   quantityRequired: number;
   isAvailable: boolean;
+  stockQuantity?: number;
   quantity?: number;
 };
 
@@ -129,23 +130,40 @@ export async function getAvailableMenuItems() {
 
   try {
     [addons, inventory] = await Promise.all([getMenuAddons(), getInventoryItems()]);
-  } catch {
-    addons = [];
-    inventory = [];
+  } catch (error) {
+    console.warn("[menu] Browser add-on read failed. Falling back to menu add-ons API.", error);
+
+    try {
+      const response = await fetch("/api/menu/addons", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to load menu add-ons.");
+      addons = result.addons ?? [];
+      inventory = result.inventory ?? [];
+    } catch (fallbackError) {
+      console.error("[menu] Unable to load add-ons for customer menu.", fallbackError);
+      addons = [];
+      inventory = [];
+    }
   }
 
   return items.map((item) => ({
     ...item,
     addons: addons
       .filter((addon) => addon.menu_item_id === item.id)
-      .map((addon) => ({
-        id: addon.id,
-        inventoryItemId: addon.inventory_item_id,
-        name: inventory.find((stockItem) => stockItem.id === addon.inventory_item_id)?.name ?? "Add-on",
-        priceDelta: Number(addon.price_delta),
-        quantityRequired: Number(addon.quantity_required),
-        isAvailable: addon.is_available,
-      })),
+      .map((addon) => {
+        const stockItem = inventory.find((item) => item.id === addon.inventory_item_id);
+        const stockQuantity = Number(stockItem?.quantity ?? 0);
+        return {
+          id: addon.id,
+          inventoryItemId: addon.inventory_item_id,
+          name: stockItem?.name ?? "Add-on",
+          priceDelta: Number(addon.price_delta),
+          quantityRequired: Math.max(1, Number(addon.quantity_required)),
+          isAvailable: addon.is_available && stockQuantity > 0,
+          stockQuantity,
+        };
+      })
+      .filter((addon) => addon.isAvailable),
   }));
 }
 

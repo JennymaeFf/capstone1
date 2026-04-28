@@ -391,7 +391,7 @@ export default function MenuPage() {
                   <button disabled className="w-full bg-gray-300 text-gray-600 font-semibold py-2 rounded-lg text-sm">
                     Unavailable
                   </button>
-                ) : DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) ? (
+                ) : DRINK_CATEGORIES.includes(item.category) || hasSizes(item.category) || (item.addons ?? []).length > 0 ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalQty(1); setModalAddonQuantities({}); setModalSize(getSizes(item.category)[0].label); }}
                     className="w-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-semibold py-2 rounded-lg transition shadow-sm text-sm"
@@ -433,6 +433,9 @@ export default function MenuPage() {
           .filter((addon) => addon.quantity > 0);
         const addonTotal = selectedAddons.reduce((sum, addon) => sum + addon.priceDelta * Number(addon.quantity ?? 0), 0);
         const computedPrice = basePrice + sizeExtra + addonTotal;
+        const getAddonMaxQty = (addon: MenuAddonOption) =>
+          Math.max(0, Math.floor(Number(addon.stockQuantity ?? 0) / Math.max(1, Number(addon.quantityRequired || 1)) / Math.max(1, modalQty)));
+        const selectedAddonStockError = selectedAddons.some((addon) => Number(addon.quantity ?? 0) > getAddonMaxQty(addon));
         return (
           <div className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center px-4" onClick={closeModal}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -474,11 +477,13 @@ export default function MenuPage() {
                     <div className="space-y-2">
                       {selectedItem.addons?.map((addon) => {
                         const addonQty = modalAddonQuantities[addon.id] ?? 0;
+                        const maxAddonQty = getAddonMaxQty(addon);
                         return (
                           <div key={addon.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e0e0e0] px-3 py-2">
                             <div className="min-w-0">
                               <p className="truncate text-xs font-bold text-[#5d4037]">{addon.name}</p>
                               <p className="text-[10px] text-[#2e7d32]">+P{addon.priceDelta.toFixed(2)} each</p>
+                              <p className="text-[10px] text-[#a1887f]">Available: {maxAddonQty}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -489,8 +494,9 @@ export default function MenuPage() {
                               </button>
                               <span className="w-6 text-center text-sm font-bold text-[#1b5e20]">{addonQty}</span>
                               <button
-                                onClick={() => setModalAddonQuantities((previous) => ({ ...previous, [addon.id]: addonQty + 1 }))}
-                                className="w-7 h-7 rounded-full bg-[#4caf50] hover:bg-[#388e3c] text-white font-bold text-sm flex items-center justify-center"
+                                onClick={() => setModalAddonQuantities((previous) => ({ ...previous, [addon.id]: Math.min(maxAddonQty, addonQty + 1) }))}
+                                disabled={addonQty >= maxAddonQty}
+                                className="w-7 h-7 rounded-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-bold text-sm flex items-center justify-center"
                               >
                                 +
                               </button>
@@ -509,7 +515,7 @@ export default function MenuPage() {
                 </div>
                 <button
                   onClick={() => { handleAddToCart(selectedItem, modalQty, hasSize ? modalSize : undefined, selectedAddons); closeModal(); }}
-                  disabled={false}
+                  disabled={selectedAddonStockError}
                   className="w-full bg-[#4caf50] hover:bg-[#388e3c] disabled:bg-gray-300 disabled:text-gray-600 text-white font-semibold py-2.5 rounded-xl text-sm transition"
                 >
                   Add to Cart - P{(computedPrice * modalQty).toFixed(2)}
