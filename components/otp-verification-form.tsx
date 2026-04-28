@@ -114,6 +114,16 @@ export default function OtpVerificationForm({ purpose, title, message }: OtpVeri
     if (!raw) throw new Error("No pending registration found. Please register again.");
 
     const pending = JSON.parse(raw) as PendingRegistration;
+    if (!pending.name || !pending.email || !pending.password) {
+      console.error("[verify/register] Missing pending registration data", {
+        hasName: Boolean(pending.name),
+        hasEmail: Boolean(pending.email),
+        hasPassword: Boolean(pending.password),
+        role: pending.role,
+      });
+      throw new Error("Registration data is incomplete. Please register again.");
+    }
+
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -127,6 +137,7 @@ export default function OtpVerificationForm({ purpose, title, message }: OtpVeri
     const result = await response.json();
 
     if (!response.ok) {
+      console.error("[verify/register] Account creation failed after OTP", result);
       throw new Error(result.error || "Unable to create account.");
     }
 

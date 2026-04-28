@@ -2,9 +2,24 @@ import { NextResponse } from "next/server";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 type AccountRole = "admin" | "customer";
+type SupabaseStepError = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+};
 
 function normalizeRole(value: unknown): AccountRole {
   return value === "admin" ? "admin" : "customer";
+}
+
+function formatSupabaseError(step: string, error: SupabaseStepError) {
+  return [
+    `${step}: ${error.message || "Unknown Supabase error"}`,
+    error.details ? `Details: ${error.details}` : "",
+    error.hint ? `Hint: ${error.hint}` : "",
+    error.code ? `Code: ${error.code}` : "",
+  ].filter(Boolean).join(" ");
 }
 
 export async function POST(request: Request) {
@@ -20,38 +35,76 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabaseServiceClient();
-    const { data, error } = await supabase.auth.admin.createUser({
+    console.log("[auth/register] Creating verified auth user", { email, role });
+
+    const { data, error: createUserError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
         full_name: name,
+        role,
       },
     });
 
-    if (error) {
-      return NextResponse.json({ error: error.message || "Unable to create account." }, { status: 400 });
+    if (createUserError) {
+      const message = formatSupabaseError("Supabase Auth create user failed", createUserError);
+      console.error("[auth/register] createUserError", createUserError);
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     if (!data.user) {
       return NextResponse.json({ error: "Account was not created." }, { status: 500 });
     }
 
+    const userId = data.user.id;
+
+    const profilePayload = {
+      id: userId,
+      full_name: name,
+      is_admin: role === "admin",
+    };
     const { error: profileError } = await supabase
       .from("profiles")
-      .upsert({ id: data.user.id, full_name: name }, { onConflict: "id" });
+      .upsert(profilePayload, { onConflict: "id" });
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error("[auth/register] profileError", profileError, { userId, email, role });
+
+      const missingIsAdminColumn = profileError.message?.toLowerCase().includes("is_admin");
+      if (missingIsAdminColumn) {
+        const { error: fallbackProfileError } = await supabase
+          .from("profiles")
+          .upsert({ id: userId, full_name: name }, { onConflict: "id" });
+
+        if (fallbackProfileError) {
+          const message = formatSupabaseError("Profile insert failed", fallbackProfileError);
+          console.error("[auth/register] fallbackProfileError", fallbackProfileError, { userId, email, role });
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+      } else {
+        const message = formatSupabaseError("Profile insert failed", profileError);
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+    }
 
     const { error: roleError } = await supabase
       .from("app_users")
-      .upsert({ id: data.user.id, role }, { onConflict: "id" });
+      .upsert({ id: userId, role }, { onConflict: "id" });
 
-    if (roleError) throw roleError;
+    if (roleError) {
+      const message = formatSupabaseError("App user role insert failed", roleError);
+      console.error("[auth/register] roleError", roleError, { userId, email, role });
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
 
-    return NextResponse.json({ role, userId: data.user.id });
+    console.log("[auth/register] Registration completed", { userId, email, role });
+    return NextResponse.json({ role, userId, verified: true });
   } catch (error) {
     console.error("[auth/register]", error);
-    return NextResponse.json({ error: "Unable to register account right now." }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to register account right now." },
+      { status: 500 }
+    );
   }
 }
