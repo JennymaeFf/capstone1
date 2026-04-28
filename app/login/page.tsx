@@ -52,6 +52,25 @@ export default function LoginPage() {
       const role = await getCurrentAppUserRole(user?.id, user?.email);
       console.log("[login] Redirect role:", role);
 
+      const otpResponse = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), purpose: "login" }),
+      });
+      const otpResult = await otpResponse.json();
+
+      if (!otpResponse.ok) {
+        await supabase.auth.signOut();
+        setError(otpResult.error || "Unable to send login verification code.");
+        return;
+      }
+
+      if (otpResult.enabled !== false) {
+        sessionStorage.setItem("indabest_pending_login", JSON.stringify({ email: email.trim(), role }));
+        router.push("/verify-login");
+        return;
+      }
+
       notifyAuthChange();
       router.push(role === "admin" ? "/admin/dashboard" : "/menu");
     } catch (err) {

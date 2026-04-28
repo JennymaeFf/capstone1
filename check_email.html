@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check Email | Indabest Crave Corner</title>
+  <style>
+    :root {
+      --green: #2f6b3f;
+      --green-dark: #214d2e;
+      --cream: #fff7e8;
+      --beige: #ead7b7;
+      --orange: #e8862f;
+      --brown: #5b3924;
+      --soft: #fffaf1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--brown);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(232, 134, 47, 0.18), transparent 28%),
+        radial-gradient(circle at 80% 80%, rgba(47, 107, 63, 0.16), transparent 28%),
+        linear-gradient(135deg, var(--cream), #f2ddb8);
+    }
+
+    main {
+      width: min(100%, 440px);
+    }
+
+    .card {
+      padding: 36px 32px;
+      border-radius: 24px;
+      border: 1px solid rgba(91, 57, 36, 0.12);
+      background: rgba(255, 250, 241, 0.96);
+      box-shadow: 0 18px 45px rgba(91, 57, 36, 0.18);
+      text-align: center;
+    }
+
+    .email-icon {
+      width: 78px;
+      height: 78px;
+      margin: 0 auto 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--green), var(--green-dark));
+      color: var(--cream);
+      font-size: 38px;
+      box-shadow: 0 12px 24px rgba(47, 107, 63, 0.24);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      color: var(--green-dark);
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #735039;
+      line-height: 1.55;
+    }
+
+    .sub-message {
+      margin-top: 6px;
+    }
+
+    .verify-link {
+      min-height: 48px;
+      margin-top: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--orange), #bd641f);
+      color: #fffaf1;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 12px 24px rgba(232, 134, 47, 0.24);
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .verify-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 28px rgba(232, 134, 47, 0.28);
+    }
+
+    .brand-note {
+      margin-top: 18px;
+      font-size: 0.9rem;
+      color: #866348;
+    }
+
+    @media (max-width: 420px) {
+      body {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 30px 20px;
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="email-title">
+      <div class="email-icon" aria-hidden="true">✉</div>
+      <h1 id="email-title">Verification code sent to your email</h1>
+      <p class="sub-message">Please check your inbox or spam folder</p>
+      <a class="verify-link" href="verify.html">Go to Verify Page</a>
+      <p class="brand-note">Indabest Crave Corner is saving your seat at the table.</p>
+    </section>
+  </main>
+</body>
+</html>

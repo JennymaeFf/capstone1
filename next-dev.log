@@ -1,0 +1,14 @@
+
+> my-app@0.1.0 dev
+> next dev --port 3000
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.137.230:3000
+- Environments: .env.local
+
+✓ Starting...
+Creating turbopack project { dir: 'C:\\jennyyy\\my-app', testMode: true }
+✓ Ready in 5s
+○ Compiling /api/otp/send ...
+ POST /api/otp/send 200 in 10.0s (compile: 5.8s, render: 4.2s)

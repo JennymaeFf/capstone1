@@ -10,7 +10,7 @@ from (
   ('Strawberry Syrup', 'ingredient', 30.00, 'bottle', 5.00, null),
   ('Yakult', 'ingredient', 48.00, 'pcs', 12.00, null),
   ('Coffee Mix', 'ingredient', 25.00, 'pack', 5.00, null),
-  ('Zagu Powder', 'ingredient', 20.00, 'pack', 4.00, null),
+  ('Zagu Powder', 'ingredient', 20.00, 'pack', =4.00, null),
   ('Pizza Dough', 'ingredient', 25.00, 'pcs', 5.00, null),
   ('Pizza Toppings', 'ingredient', 20.00, 'set', 4.00, null),
   ('Rice', 'ingredient', 50.00, 'serving', 10.00, null),

@@ -74,7 +74,7 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuError, setMenuError] = useState("");
   const [paymentProofError, setPaymentProofError] = useState("");
-  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "We are open and accepting orders." });
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "" });
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -384,9 +384,11 @@ export default function MenuPage() {
       {/* MENU LAYOUT */}
       <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
           <section className="min-w-0">
-          <div className={`mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${storeStatus.isOpen ? "border-[#c8e6c9] bg-white text-[#1b5e20]" : "border-red-200 bg-red-50 text-red-600"}`}>
-            {storeStatus.message}
-          </div>
+          {!storeStatus.isOpen && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {storeStatus.message || "Store is closed right now. Please check again later."}
+            </div>
+          )}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-bold text-[#1b5e20]">{activeCategory}</h3>

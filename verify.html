@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Account | Indabest Crave Corner</title>
+  <style>
+    :root {
+      --green: #2f6b3f;
+      --green-dark: #214d2e;
+      --cream: #fff7e8;
+      --beige: #ead7b7;
+      --orange: #e8862f;
+      --brown: #5b3924;
+      --soft: #fffaf1;
+      --danger: #b83232;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--brown);
+      background:
+        radial-gradient(circle at top left, rgba(232, 134, 47, 0.18), transparent 28%),
+        linear-gradient(135deg, var(--cream), #f5e4c5);
+    }
+
+    main {
+      width: min(100%, 460px);
+    }
+
+    .card {
+      background: rgba(255, 250, 241, 0.96);
+      border: 1px solid rgba(91, 57, 36, 0.12);
+      border-radius: 24px;
+      box-shadow: 0 18px 45px rgba(91, 57, 36, 0.18);
+      padding: 34px;
+      text-align: center;
+    }
+
+    .brand-mark {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 16px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--green), var(--green-dark));
+      color: var(--cream);
+      font-size: 32px;
+      box-shadow: 0 10px 24px rgba(47, 107, 63, 0.28);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.35rem);
+      color: var(--green-dark);
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    .message {
+      margin-bottom: 26px;
+      color: #74513a;
+    }
+
+    .otp-group {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .otp-input {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 2px solid var(--beige);
+      border-radius: 14px;
+      background: #fffdf8;
+      color: var(--brown);
+      font-size: clamp(1.3rem, 5vw, 1.75rem);
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    .otp-input:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 4px rgba(232, 134, 47, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .error-message {
+      min-height: 22px;
+      margin: 6px 0 18px;
+      color: var(--danger);
+      font-size: 0.95rem;
+    }
+
+    .actions {
+      display: grid;
+      gap: 12px;
+    }
+
+    button {
+      min-height: 48px;
+      border: 0;
+      border-radius: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .verify-btn {
+      background: linear-gradient(135deg, var(--green), var(--green-dark));
+      color: var(--cream);
+      box-shadow: 0 12px 24px rgba(47, 107, 63, 0.24);
+    }
+
+    .resend-btn {
+      background: #f3dfbd;
+      color: var(--brown);
+      border: 1px solid rgba(91, 57, 36, 0.1);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+
+    .hint {
+      margin-top: 18px;
+      font-size: 0.9rem;
+      color: #866348;
+    }
+
+    @media (max-width: 420px) {
+      body {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 26px 18px;
+        border-radius: 20px;
+      }
+
+      .otp-group {
+        gap: 7px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="verify-title">
+      <div class="brand-mark" aria-hidden="true">🍽</div>
+      <h1 id="verify-title">Verify Account</h1>
+      <p class="message">Enter the verification code sent to your email</p>
+
+      <form action="#" method="post" id="otpForm" novalidate>
+        <div class="otp-group" role="group" aria-label="6-digit verification code">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">
+          <input class="otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+        </div>
+        <input type="hidden" name="otp" id="otpValue">
+        <p class="error-message" id="otpError" aria-live="polite"></p>
+
+        <div class="actions">
+          <button class="verify-btn" type="submit">Verify</button>
+          <button class="resend-btn" type="button" id="resendBtn">Resend OTP</button>
+        </div>
+      </form>
+
+      <p class="hint">Indabest Crave Corner keeps your account fresh and secure.</p>
+    </section>
+  </main>
+
+  <script>
+    const inputs = Array.from(document.querySelectorAll(".otp-input"));
+    const otpValue = document.getElementById("otpValue");
+    const otpError = document.getElementById("otpError");
+    const otpForm = document.getElementById("otpForm");
+    const resendBtn = document.getElementById("resendBtn");
+    let cooldownTimer;
+
+    function syncOtp() {
+      otpValue.value = inputs.map((input) => input.value).join("");
+    }
+
+    function startCooldown(seconds = 60) {
+      let remaining = seconds;
+      resendBtn.disabled = true;
+      resendBtn.textContent = `Resend OTP (${remaining}s)`;
+
+      clearInterval(cooldownTimer);
+      cooldownTimer = setInterval(() => {
+        remaining -= 1;
+        resendBtn.textContent = `Resend OTP (${remaining}s)`;
+
+        if (remaining <= 0) {
+          clearInterval(cooldownTimer);
+          resendBtn.disabled = false;
+          resendBtn.textContent = "Resend OTP";
+        }
+      }, 1000);
+    }
+
+    inputs.forEach((input, index) => {
+      input.addEventListener("input", (event) => {
+        const digit = event.target.value.replace(/\D/g, "").slice(-1);
+        event.target.value = digit;
+        syncOtp();
+
+        if (digit && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Backspace" && !input.value && index > 0) {
+          inputs[index - 1].focus();
+        }
+      });
+
+      input.addEventListener("paste", (event) => {
+        event.preventDefault();
+        const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+        pasted.split("").forEach((digit, digitIndex) => {
+          inputs[digitIndex].value = digit;
+        });
+        syncOtp();
+        inputs[Math.min(pasted.length, inputs.length) - 1]?.focus();
+      });
+    });
+
+    otpForm.addEventListener("submit", (event) => {
+      syncOtp();
+      otpError.textContent = "";
+
+      if (otpValue.value.length !== 6) {
+        event.preventDefault();
+        otpError.textContent = "Please enter the complete 6-digit OTP.";
+        inputs.find((input) => !input.value)?.focus();
+      }
+    });
+
+    resendBtn.addEventListener("click", () => {
+      otpError.textContent = "";
+      startCooldown();
+    });
+  </script>
+</body>
+</html>

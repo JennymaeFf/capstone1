@@ -1,6 +1,29 @@
 -- Store open/closed setting for admin dashboard.
 -- Run this in Supabase Dashboard > SQL Editor if the store toggle is missing or errors.
 
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select role = 'admin' from public.app_users where id = auth.uid()),
+    false
+  );
+$$;
+
 create table if not exists public.app_settings (
   key text primary key,
   value jsonb not null default '{}'::jsonb,
@@ -8,8 +31,13 @@ create table if not exists public.app_settings (
 );
 
 insert into public.app_settings (key, value)
-values ('store_status', '{"is_open": true, "message": "We are open and accepting orders."}'::jsonb)
-on conflict (key) do nothing;
+values ('store_status', '{"is_open": true, "message": ""}'::jsonb)
+on conflict (key) do update
+set value = case
+  when (public.app_settings.value->>'message') = 'We are open and accepting orders.'
+    then jsonb_set(public.app_settings.value, '{message}', '""'::jsonb)
+  else public.app_settings.value
+end;
 
 drop trigger if exists app_settings_set_updated_at on public.app_settings;
 create trigger app_settings_set_updated_at
@@ -27,4 +55,9 @@ drop policy if exists "Admins can update app settings" on public.app_settings;
 create policy "Admins can update app settings"
 on public.app_settings for update
 using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins can insert app settings" on public.app_settings;
+create policy "Admins can insert app settings"
+on public.app_settings for insert
 with check (public.is_admin());

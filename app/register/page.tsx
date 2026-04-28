@@ -41,28 +41,46 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: emailAddress,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+      const otpResponse = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailAddress, purpose: "registration" }),
       });
+      const otpResult = await otpResponse.json();
 
-      if (signUpError) {
-        setError(signUpError.message || "Unable to create account.");
+      if (!otpResponse.ok) {
+        setError(otpResult.error || "Unable to send verification code.");
         return;
       }
 
-      setSuccess(
-        data.session
-          ? "Account created! Redirecting to login..."
-          : "Account created! Please check your email to confirm your account."
+      if (otpResult.enabled === false) {
+        const supabase = getSupabaseBrowserClient();
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: emailAddress,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+          },
+        });
+
+        if (signUpError) {
+          setError(signUpError.message || "Unable to create account.");
+          return;
+        }
+
+        setSuccess(data.session ? "Account created! Redirecting to login..." : "Account created! Please check your email.");
+        setTimeout(() => router.push("/login"), 1200);
+        return;
+      }
+
+      sessionStorage.setItem(
+        "indabest_pending_registration",
+        JSON.stringify({ name: fullName, email: emailAddress, password })
       );
-      setTimeout(() => router.push("/login"), 1200);
+      setSuccess("Verification code sent! Redirecting...");
+      setTimeout(() => router.push("/check-email"), 700);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account right now.");
     } finally {

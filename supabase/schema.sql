@@ -77,7 +77,7 @@ create table if not exists public.app_settings (
 );
 
 insert into public.app_settings (key, value)
-values ('store_status', '{"is_open": true, "message": "We are open and accepting orders."}'::jsonb)
+values ('store_status', '{"is_open": true, "message": ""}'::jsonb)
 on conflict (key) do nothing;
 
 insert into public.app_users (id, role)
@@ -726,6 +726,11 @@ drop policy if exists "Admins can update app settings" on public.app_settings;
 create policy "Admins can update app settings"
 on public.app_settings for update
 using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins can insert app settings" on public.app_settings;
+create policy "Admins can insert app settings"
+on public.app_settings for insert
 with check (public.is_admin());
 
 drop policy if exists "Admins can insert app users" on public.app_users;

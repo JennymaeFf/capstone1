@@ -24,7 +24,6 @@ import {
   replyToContactMessage,
   uploadMenuItemImage,
   updateMenuItem,
-  updateOrderStatus,
   updateStoreStatus,
   upsertInventoryItem,
   type InventoryRow,
@@ -105,7 +104,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [contactMessages, setContactMessages] = useState<AdminMessage[]>([]);
   const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof getAdminMetrics>> | null>(null);
-  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "We are open and accepting orders." });
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>({ isOpen: true, message: "" });
   const [editingMenuId, setEditingMenuId] = useState("");
   const [editingInventoryId, setEditingInventoryId] = useState("");
   const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
@@ -310,6 +309,45 @@ export default function AdminPage() {
       await loadAdminData();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to mark message read.");
+    }
+  };
+
+  const changeOrderStatus = async (orderId: string, status: string) => {
+    try {
+      setMessage("");
+      const supabase = getSupabaseBrowserClient();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session?.access_token) {
+        throw new Error("Admin session expired. Please log in again.");
+      }
+
+      const response = await fetch("/api/orders/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({ orderId, status }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to update order status.");
+      }
+
+      if (result.warning) {
+        setMessage(result.warning);
+      } else if (result.emailSent) {
+        setMessage("Order status updated and customer email sent.");
+      } else {
+        setMessage("Order status updated.");
+      }
+
+      await loadAdminData();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to update order status.");
+      await loadAdminData();
     }
   };
 
@@ -640,8 +678,7 @@ export default function AdminPage() {
                   key={order.id}
                   value={order.status}
                   onChange={async (e) => {
-                    await updateOrderStatus(order.id, e.target.value);
-                    await loadAdminData();
+                    await changeOrderStatus(order.id, e.target.value);
                   }}
                   className="rounded-lg border border-[#c8e6c9] bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#8bbd66]"
                 >
@@ -927,6 +964,7 @@ function InventoryAlerts({ lowStockItems, unavailableMenuItems }: { lowStockItem
 
 function StoreStatusPanel({ storeStatus, onSave }: { storeStatus: StoreStatus; onSave: (status: StoreStatus) => Promise<void> }) {
   const [message, setMessage] = useState(storeStatus.message);
+  const displayMessage = storeStatus.message || (storeStatus.isOpen ? "No customer notice is shown while the store is open." : "Store is closed right now. Please check again later.");
 
   return (
     <section className="rounded-lg border border-[#d8e5cc] bg-white p-4 shadow-sm">
@@ -934,10 +972,14 @@ function StoreStatusPanel({ storeStatus, onSave }: { storeStatus: StoreStatus; o
         <div>
           <p className="text-xs font-bold uppercase text-[#5f8f49]">Store Status</p>
           <h2 className="mt-1 text-lg font-bold text-[#174b21]">{storeStatus.isOpen ? "Open for orders" : "Closed for orders"}</h2>
-          <p className="text-sm text-[#6f625a]">{storeStatus.message}</p>
+          <p className="text-sm text-[#6f625a]">{displayMessage}</p>
         </div>
         <button
-          onClick={() => void onSave({ ...storeStatus, isOpen: !storeStatus.isOpen })}
+          onClick={() => void onSave({
+            ...storeStatus,
+            isOpen: !storeStatus.isOpen,
+            message: !storeStatus.isOpen ? "" : (storeStatus.message || "Store is closed right now. Please check again later."),
+          })}
           className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow-sm transition ${storeStatus.isOpen ? "bg-red-600 hover:bg-red-700" : "bg-[#246b2d] hover:bg-[#1b5e20]"}`}
         >
           {storeStatus.isOpen ? "Close Store" : "Open Store"}
@@ -947,10 +989,11 @@ function StoreStatusPanel({ storeStatus, onSave }: { storeStatus: StoreStatus; o
         <input
           value={message}
           onChange={(event) => setMessage(event.target.value)}
+          placeholder="Optional message shown only when store is closed"
           className="flex-1 rounded-lg border border-[#cbdcbe] bg-[#fbfdf8] px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:bg-white focus:ring-2 focus:ring-[#cfe8bc]"
         />
         <button
-          onClick={() => void onSave({ ...storeStatus, message: message.trim() || storeStatus.message })}
+          onClick={() => void onSave({ ...storeStatus, message: message.trim() })}
           className="rounded-lg border border-[#cbdcbe] bg-white px-4 py-2 text-sm font-bold text-[#174b21] transition hover:bg-[#edf5e5]"
         >
           Save Message

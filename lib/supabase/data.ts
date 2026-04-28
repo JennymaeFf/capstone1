@@ -91,7 +91,7 @@ export const CONTACT_MESSAGE_COOLDOWN_SECONDS = 60;
 
 const DEFAULT_STORE_STATUS: StoreStatus = {
   isOpen: true,
-  message: "We are open and accepting orders.",
+  message: "",
 };
 
 function mapMenuItem(row: MenuRow): AppMenuItem {
@@ -163,17 +163,31 @@ export async function updateStoreStatus(status: StoreStatus) {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("app_settings")
-    .update({
+    .upsert({
+      key: "store_status",
       value: {
         is_open: status.isOpen,
         message: status.message,
       },
-    })
-    .eq("key", "store_status")
+    }, { onConflict: "key" })
     .select("value")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (
+      message.includes("app_settings") ||
+      message.includes("row-level security") ||
+      message.includes("violates row-level security") ||
+      message.includes("permission denied") ||
+      message.includes("does not exist") ||
+      message.includes("schema cache") ||
+      message.includes("could not find")
+    ) {
+      throw new Error("Store status setup is not complete. Run supabase/store_status_setup.sql in Supabase SQL Editor, then refresh admin.");
+    }
+    throw error;
+  }
   return mapStoreStatus(data.value);
 }
 
