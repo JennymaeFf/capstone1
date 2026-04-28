@@ -8,7 +8,7 @@ function isPurpose(value: unknown): value is OtpPurpose {
 
 function isOtpEnabled(purpose: OtpPurpose) {
   if (purpose === "login") return process.env.ENABLE_LOGIN_OTP === "true";
-  return process.env.ENABLE_REGISTRATION_OTP !== "false";
+  return true;
 }
 
 export async function POST(request: Request) {

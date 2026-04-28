@@ -78,7 +78,7 @@ export default function LoginPage() {
       }
 
       notifyAuthChange();
-      router.push("/menu");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to log in right now.");
     } finally {

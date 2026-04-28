@@ -12,7 +12,7 @@ type PendingRegistration = {
   name: string;
   email: string;
   password: string;
-  role?: "customer";
+  role?: "admin" | "customer";
 };
 
 type PendingLogin = {
@@ -121,7 +121,7 @@ export default function OtpVerificationForm({ purpose, title, message }: OtpVeri
         name: pending.name,
         email: pending.email,
         password: pending.password,
-        role: "customer",
+        role: pending.role === "admin" ? "admin" : "customer",
       }),
     });
     const result = await response.json();
@@ -142,7 +142,7 @@ export default function OtpVerificationForm({ purpose, title, message }: OtpVeri
     sessionStorage.removeItem(storageKeys.login);
     notifyAuthChange();
     setSuccess("Login verified! Redirecting...");
-    window.setTimeout(() => router.push(pending?.role === "admin" ? "/admin/dashboard" : "/menu"), 700);
+    window.setTimeout(() => router.push(pending?.role === "admin" ? "/admin/dashboard" : "/dashboard"), 700);
   }
 
   async function handleSubmit(event: React.FormEvent) {

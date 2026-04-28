@@ -43,24 +43,6 @@ export default function RegisterPage() {
     try {
       const accountRole = new URLSearchParams(window.location.search).get("role") === "admin" ? "admin" : "customer";
 
-      if (accountRole === "admin") {
-        const registerResponse = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: fullName, email: emailAddress, password, role: "admin" }),
-        });
-        const registerResult = await registerResponse.json();
-
-        if (!registerResponse.ok) {
-          setError(registerResult.error || "Unable to create admin account.");
-          return;
-        }
-
-        setSuccess("Admin account created! Redirecting to login...");
-        setTimeout(() => router.push("/login"), 1200);
-        return;
-      }
-
       const otpResponse = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,26 +56,13 @@ export default function RegisterPage() {
       }
 
       if (otpResult.enabled === false) {
-        const registerResponse = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: fullName, email: emailAddress, password, role: "customer" }),
-        });
-        const registerResult = await registerResponse.json();
-
-        if (!registerResponse.ok) {
-          setError(registerResult.error || "Unable to create account.");
-          return;
-        }
-
-        setSuccess("Account created! Redirecting to login...");
-        setTimeout(() => router.push("/login"), 1200);
+        setError("Registration OTP verification is required. Please enable OTP and try again.");
         return;
       }
 
       sessionStorage.setItem(
         "indabest_pending_registration",
-        JSON.stringify({ name: fullName, email: emailAddress, password, role: "customer" })
+        JSON.stringify({ name: fullName, email: emailAddress, password, role: accountRole })
       );
       setSuccess("Verification code sent! Redirecting...");
       setTimeout(() => router.push("/check-email"), 700);
