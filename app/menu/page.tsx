@@ -68,6 +68,7 @@ const SIZE_OPTIONS: Record<string, { label: string; extra: number }[]> = {
   "Bites Express":     [{ label: "Small", extra: 0 }, { label: "Medium", extra: 15 }, { label: "Large", extra: 25 }],
 };
 const SIZES = [{ label: "Small", extra: 0 }, { label: "Medium", extra: 10 }, { label: "Large", extra: 20 }];
+const CART_STORAGE_KEY = "indabest_cart";
 const CART_COUNT_STORAGE_KEY = "indabest_cart_count";
 const RICE_MENU_ITEM: MenuItem = {
   id: "",
@@ -149,6 +150,20 @@ function updateNavbarCartCount(count: number) {
   window.dispatchEvent(new CustomEvent("indabest:cart-count-changed", { detail: { count } }));
 }
 
+function getCartCount(cartItems: CartItem[]) {
+  return cartItems.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function saveCart(cartItems: CartItem[]) {
+  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+  updateNavbarCartCount(getCartCount(cartItems));
+}
+
+function clearSavedCart() {
+  window.localStorage.removeItem(CART_STORAGE_KEY);
+  updateNavbarCartCount(0);
+}
+
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const { isLoggedIn, userName, userEmail } = useAuthProfile();
@@ -184,6 +199,28 @@ export default function MenuPage() {
     };
 
     void loadMenu();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedCart = JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) || "[]") as CartItem[];
+      if (!Array.isArray(savedCart)) return;
+
+      const validCart = savedCart.filter((item) =>
+        item &&
+        typeof item.name === "string" &&
+        typeof item.image === "string" &&
+        typeof item.finalPrice === "number" &&
+        typeof item.quantity === "number" &&
+        item.quantity > 0
+      );
+
+      setCart(validCart);
+      updateNavbarCartCount(getCartCount(validCart));
+    } catch (error) {
+      console.warn("[cart] Unable to load saved cart.", error);
+      clearSavedCart();
+    }
   }, []);
 
   useEffect(() => {
@@ -328,7 +365,7 @@ export default function MenuPage() {
       const nextCart = existing
         ? prev.map((c) => cartKey(c.name, c.size, c.addons) === key ? { ...c, quantity: c.quantity + qty } : c)
         : [...prev, { ...item, addons: cartAddons, quantity: qty, size, finalPrice }];
-      updateNavbarCartCount(nextCart.reduce((sum, cartItem) => sum + cartItem.quantity, 0));
+      saveCart(nextCart);
       return nextCart;
     });
     setCartNotice("Added to cart!");
@@ -342,7 +379,7 @@ export default function MenuPage() {
       const nextCart = existing.quantity === 1
         ? prev.filter((c) => cartKey(c.name, c.size, c.addons) !== key)
         : prev.map((c) => cartKey(c.name, c.size, c.addons) === key ? { ...c, quantity: c.quantity - 1 } : c);
-      updateNavbarCartCount(nextCart.reduce((sum, cartItem) => sum + cartItem.quantity, 0));
+      saveCart(nextCart);
       return nextCart;
     });
   };
@@ -357,7 +394,7 @@ export default function MenuPage() {
       await createOrder({ checkoutInfo, cart, totalPrice: subtotalPrice });
       localStorage.setItem("checkoutInfo", JSON.stringify(checkoutInfo));
       setCart([]);
-      updateNavbarCartCount(0);
+      clearSavedCart();
       setShowCheckout(false);
       setCheckoutInfo(getSavedCheckoutInfo());
       router.push("/orders");
