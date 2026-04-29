@@ -57,7 +57,6 @@ const ADMIN_TABS = [
   { id: "messages", label: "Messages" },
   { id: "menu", label: "Menu" },
   { id: "inventory", label: "Inventory" },
-  { id: "links", label: "Links" },
   { id: "orders", label: "Orders" },
 ];
 
@@ -521,7 +520,7 @@ export default function AdminPage() {
             )}
 
             {activeTab === "inventory" && (
-              <section>
+              <section className="space-y-5">
                 <Panel
                   title="Stock List"
                   action={
@@ -596,11 +595,7 @@ export default function AdminPage() {
                     ])}
                   />
                 </Panel>
-              </section>
-            )}
-
-            {activeTab === "links" && (
-              <section className="grid gap-5 xl:grid-cols-2">
+                <div className="grid gap-5 xl:grid-cols-2">
             <Panel title="Menu Item Requirements">
               <Select label="Menu Item" value={requirementForm.menu_item_id} options={menuItems.map((item) => item.id)} labels={Object.fromEntries(menuItems.map((item) => [item.id, item.name]))} onChange={(value) => setRequirementForm((p) => ({ ...p, menu_item_id: value }))} />
               <Select label="Inventory Item" value={requirementForm.inventory_item_id} options={inventory.map((item) => item.id)} labels={Object.fromEntries(inventory.map((item) => [item.id, `${item.name} (${item.inventory_type})`]))} onChange={(value) => setRequirementForm((p) => ({ ...p, inventory_item_id: value }))} />
@@ -619,7 +614,7 @@ export default function AdminPage() {
 
             <Panel title="Add-ons / Extras">
               <Select label="Menu Item" value={addonForm.menu_item_id} options={menuItems.map((item) => item.id)} labels={Object.fromEntries(menuItems.map((item) => [item.id, item.name]))} onChange={(value) => setAddonForm((p) => ({ ...p, menu_item_id: value }))} />
-              <Select label="Add-on Stock" value={addonForm.inventory_item_id} options={inventory.filter((item) => item.inventory_type === "addon").map((item) => item.id)} labels={Object.fromEntries(inventory.filter((item) => item.inventory_type === "addon").map((item) => [item.id, item.name]))} onChange={(value) => setAddonForm((p) => ({ ...p, inventory_item_id: value }))} />
+              <Select label="Add-on Stock" value={addonForm.inventory_item_id} options={inventory.map((item) => item.id)} labels={Object.fromEntries(inventory.map((item) => [item.id, `${item.name} (${item.inventory_type}, ${Number(item.quantity)} ${item.unit})`]))} onChange={(value) => setAddonForm((p) => ({ ...p, inventory_item_id: value }))} />
               <Input label="Extra price" type="number" value={addonForm.price_delta} onChange={(value) => setAddonForm((p) => ({ ...p, price_delta: value }))} />
               <Input label="Stock used per add-on" type="number" value={addonForm.quantity_required} onChange={(value) => setAddonForm((p) => ({ ...p, quantity_required: value }))} />
               <button onClick={submitAddon} className="mb-4 w-full rounded-lg bg-[#246b2d] py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20]">Add Add-on</button>
@@ -633,6 +628,7 @@ export default function AdminPage() {
                 ])}
               />
             </Panel>
+                </div>
               </section>
             )}
 

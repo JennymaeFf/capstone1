@@ -13,8 +13,7 @@ export async function GET() {
         .order("created_at", { ascending: true }),
       supabase
         .from("inventory_items")
-        .select("*")
-        .eq("inventory_type", "addon"),
+        .select("*"),
     ]);
 
     if (addonsResult.error) throw addonsResult.error;

@@ -501,7 +501,7 @@ export default function MenuPage() {
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{menuError}</p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
             {filteredItems.map((item, index) => (
             <div
               key={item.id || index}
@@ -514,6 +514,11 @@ export default function MenuPage() {
               <div className="p-5 text-center">
                 <h4 className="text-lg font-semibold text-[#5d4037] mb-1">{item.name}</h4>
                 <p className="text-[#2e7d32] font-bold text-xl mb-3">{item.price}</p>
+                {(item.addons ?? []).length > 0 && (
+                  <p className="mb-3 text-[11px] font-semibold text-[#a1887f]">
+                    Add-ons available
+                  </p>
+                )}
                 {!item.isAvailable ? (
                   <button disabled className="w-full bg-gray-300 text-gray-600 font-semibold py-2 rounded-lg text-sm">
                     Unavailable
