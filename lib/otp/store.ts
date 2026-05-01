@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
-export type OtpPurpose = "registration" | "login";
+export type OtpPurpose = "registration" | "login" | "password-reset";
 
 type OtpRecord = {
   codeHash: string;
@@ -21,6 +21,10 @@ function normalizeEmail(email: string) {
 function getKey(email: string, purpose: OtpPurpose) {
   const safeEmail = normalizeEmail(email).replace(/[^a-z0-9@._-]/g, "");
   return `otp:${purpose}:${safeEmail}`;
+}
+
+function getPasswordResetSessionKey(tokenHash: string) {
+  return `password-reset-session:${tokenHash}`;
 }
 
 function getSecret() {
@@ -63,8 +67,12 @@ function mapOtpRow(row: {
 }
 
 async function readOtpRecord(email: string, purpose: OtpPurpose) {
-  const supabase = getSupabaseServiceClient();
   const key = getKey(email, purpose);
+  return readOtpRecordByKey(key);
+}
+
+async function readOtpRecordByKey(key: string) {
+  const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("otp_verifications")
     .select("code_hash, expires_at, attempts, resend_available_at, email, purpose")
@@ -72,16 +80,15 @@ async function readOtpRecord(email: string, purpose: OtpPurpose) {
     .maybeSingle();
 
   if (error) {
-    console.error("[otp/store] read failed", error, { key, email: normalizeEmail(email), purpose });
+    console.error("[otp/store] read failed", error, { key });
     throw new Error(formatOtpStoreError("OTP read failed", error));
   }
 
   return mapOtpRow(data);
 }
 
-async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRecord) {
+async function writeOtpRecordByKey(key: string, record: OtpRecord) {
   const supabase = getSupabaseServiceClient();
-  const key = getKey(email, purpose);
   const { error } = await supabase
     .from("otp_verifications")
     .upsert({
@@ -95,20 +102,36 @@ async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRec
     }, { onConflict: "key" });
 
   if (error) {
-    console.error("[otp/store] write failed", error, { key, email: normalizeEmail(email), purpose });
+    console.error("[otp/store] write failed", error, { key, email: record.email, purpose: record.purpose });
     throw new Error(formatOtpStoreError("OTP save failed", error));
   }
 }
 
-async function deleteOtpRecord(email: string, purpose: OtpPurpose) {
-  const supabase = getSupabaseServiceClient();
+async function writeOtpRecord(email: string, purpose: OtpPurpose, record: OtpRecord) {
   const key = getKey(email, purpose);
+  await writeOtpRecordByKey(key, record);
+}
+
+async function deleteOtpRecord(email: string, purpose: OtpPurpose) {
+  const key = getKey(email, purpose);
+  await deleteOtpRecordByKey(key);
+}
+
+async function deleteOtpRecordByKey(key: string) {
+  const supabase = getSupabaseServiceClient();
   const { error } = await supabase.from("otp_verifications").delete().eq("key", key);
 
   if (error) {
-    console.error("[otp/store] delete failed", error, { key, email: normalizeEmail(email), purpose });
+    console.error("[otp/store] delete failed", error, { key });
     throw new Error(formatOtpStoreError("OTP delete failed", error));
   }
+}
+
+function hashPasswordResetToken(token: string) {
+  return crypto
+    .createHmac("sha256", getSecret())
+    .update(`password-reset-session:${token}`)
+    .digest("hex");
 }
 
 export async function getCooldownSeconds(email: string, purpose: OtpPurpose) {
@@ -183,4 +206,41 @@ export async function verifyOtp(email: string, purpose: OtpPurpose, code: string
   await deleteOtpRecord(normalizedEmail, purpose);
   console.log("[otp/store] OTP verified", { email: normalizedEmail, purpose });
   return { ok: true, message: "OTP verified." };
+}
+
+export async function createPasswordResetSession(email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  const token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = hashPasswordResetToken(token);
+  const now = Date.now();
+  const expiresAt = now + OTP_TTL_MS;
+
+  await writeOtpRecordByKey(getPasswordResetSessionKey(tokenHash), {
+    codeHash: tokenHash,
+    expiresAt,
+    attempts: 0,
+    resendAvailableAt: expiresAt,
+    email: normalizedEmail,
+    purpose: "password-reset",
+  });
+
+  return token;
+}
+
+export async function consumePasswordResetSession(token: string) {
+  const tokenHash = hashPasswordResetToken(token);
+  const key = getPasswordResetSessionKey(tokenHash);
+  const record = await readOtpRecordByKey(key);
+
+  if (!record || record.purpose !== "password-reset" || record.codeHash !== tokenHash) {
+    return { ok: false as const, message: "Password reset session is invalid. Please verify your OTP again." };
+  }
+
+  await deleteOtpRecordByKey(key);
+
+  if (Date.now() > record.expiresAt) {
+    return { ok: false as const, message: "Password reset session has expired. Please request a new OTP." };
+  }
+
+  return { ok: true as const, email: record.email };
 }

@@ -79,7 +79,7 @@ create table if not exists public.app_settings (
 create table if not exists public.otp_verifications (
   key text primary key,
   email text not null,
-  purpose text not null check (purpose in ('registration', 'login')),
+  purpose text not null check (purpose in ('registration', 'login', 'password-reset')),
   code_hash text not null,
   attempts integer not null default 0,
   expires_at timestamptz not null,

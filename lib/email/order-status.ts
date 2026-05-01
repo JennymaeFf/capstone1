@@ -40,16 +40,20 @@ function peso(value: number) {
 function getStatusMessage(status: string) {
   const normalized = status.toLowerCase();
 
-  if (normalized.includes("way") || normalized.includes("shipped")) {
-    return "Good news! Your cravings are on the way.";
+  if (normalized === "pending") {
+    return "We received your order and our team will review it shortly.";
+  }
+
+  if (normalized === "preparing") {
+    return "Your order is now being prepared with care.";
+  }
+
+  if (normalized.includes("way")) {
+    return "Good news! Your cravings are on the way to you.";
   }
 
   if (normalized.includes("delivered")) {
     return "Your order has been delivered. We hope it reached you fresh and warm.";
-  }
-
-  if (normalized.includes("completed")) {
-    return "Your order is now completed. Thank you for choosing us.";
   }
 
   return "Your order status has been updated.";
@@ -130,36 +134,36 @@ export async function sendOrderStatusEmail({
           <td align="center">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background-color:#fffaf1;border:1px solid #ead7b7;border-radius:18px;box-shadow:0 10px 28px rgba(91,57,36,0.14);overflow:hidden;">
               <tr>
-                <td align="center" style="background-color:#2f6b3f;padding:22px 20px;">
+                <td align="center" style="background-color:#5d4037;padding:22px 20px;">
                   <div style="font-size:24px;line-height:1;color:#fff7e8;font-weight:700;">Indabest Crave Corner</div>
-                  <div style="margin-top:8px;color:#f3dfbd;font-size:13px;">Order Status Update</div>
+                  <div style="margin-top:8px;color:#f7cf7a;font-size:13px;">Order Status Update</div>
                 </td>
               </tr>
               <tr>
                 <td style="padding:30px 24px 24px;">
                   <p style="margin:0 0 8px;color:#74513a;font-size:15px;line-height:1.5;">Hi ${safeCustomerName},</p>
-                  <h1 style="margin:0 0 14px;color:#214d2e;font-size:25px;line-height:1.25;">Your order is ${safeStatus}</h1>
+                  <h1 style="margin:0 0 14px;color:#5d4037;font-size:25px;line-height:1.25;">Your order is ${safeStatus}</h1>
                   <p style="margin:0 0 22px;color:#74513a;font-size:15px;line-height:1.6;">${escapeHtml(getStatusMessage(status))}</p>
 
-                  <div style="margin:0 0 22px;padding:16px 18px;background-color:#f3dfbd;border:1px solid #e8862f;border-radius:14px;">
+                  <div style="margin:0 0 22px;padding:16px 18px;background-color:#f3dfbd;border:1px solid #d9962f;border-radius:14px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="color:#74513a;font-size:13px;">Order Number</td>
-                        <td align="right" style="color:#214d2e;font-size:16px;font-weight:700;">#${safeOrderNumber}</td>
+                        <td align="right" style="color:#5d4037;font-size:16px;font-weight:700;">#${safeOrderNumber}</td>
                       </tr>
                       <tr>
                         <td style="padding-top:10px;color:#74513a;font-size:13px;">Status</td>
-                        <td align="right" style="padding-top:10px;color:#e8862f;font-size:16px;font-weight:700;">${safeStatus}</td>
+                        <td align="right" style="padding-top:10px;color:#b96912;font-size:16px;font-weight:700;">${safeStatus}</td>
                       </tr>
                     </table>
                   </div>
 
-                  <h2 style="margin:0 0 10px;color:#214d2e;font-size:17px;">Ordered Items</h2>
+                  <h2 style="margin:0 0 10px;color:#5d4037;font-size:17px;">Ordered Items</h2>
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;">
                     ${itemRows}
                     <tr>
-                      <td style="padding:14px 0 0;color:#214d2e;font-size:16px;font-weight:700;">Total Amount</td>
-                      <td align="right" style="padding:14px 0 0;color:#214d2e;font-size:18px;font-weight:700;">${peso(totalAmount)}</td>
+                      <td style="padding:14px 0 0;color:#5d4037;font-size:16px;font-weight:700;">Total Amount</td>
+                      <td align="right" style="padding:14px 0 0;color:#5d4037;font-size:18px;font-weight:700;">${peso(totalAmount)}</td>
                     </tr>
                   </table>
 

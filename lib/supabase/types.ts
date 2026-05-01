@@ -180,7 +180,7 @@ export type Database = {
         Row: {
           key: string;
           email: string;
-          purpose: "registration" | "login";
+          purpose: "registration" | "login" | "password-reset";
           code_hash: string;
           attempts: number;
           expires_at: string;
@@ -190,7 +190,7 @@ export type Database = {
         Insert: {
           key: string;
           email: string;
-          purpose: "registration" | "login";
+          purpose: "registration" | "login" | "password-reset";
           code_hash: string;
           attempts?: number;
           expires_at: string;
@@ -200,7 +200,7 @@ export type Database = {
         Update: {
           key?: string;
           email?: string;
-          purpose?: "registration" | "login";
+          purpose?: "registration" | "login" | "password-reset";
           code_hash?: string;
           attempts?: number;
           expires_at?: string;

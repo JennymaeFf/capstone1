@@ -4,7 +4,7 @@ import { getSupabaseServerClient, getSupabaseServiceClient } from "@/lib/supabas
 
 export const runtime = "nodejs";
 
-const EMAIL_STATUSES = new Set(["Shipped", "On the way", "Delivered", "Completed"]);
+const EMAIL_STATUSES = new Set(["pending", "preparing", "on the way", "delivered"]);
 
 type OrderItemForEmail = {
   item_name: string;
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     let emailSent = false;
     let emailWarning = "";
 
-    if (EMAIL_STATUSES.has(status)) {
+    if (EMAIL_STATUSES.has(status.toLowerCase())) {
       const [{ data: profile }, { data: authUser, error: authUserError }] = await Promise.all([
         serviceSupabase.from("profiles").select("full_name").eq("id", updatedOrder.user_id).maybeSingle(),
         serviceSupabase.auth.admin.getUserById(updatedOrder.user_id),

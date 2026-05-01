@@ -51,7 +51,8 @@ const CATEGORIES = [
 ];
 
 const INVENTORY_TYPES: InventoryType[] = ["ingredient", "packaging", "addon", "beverage"];
-const ORDER_STATUSES = ["Pending", "Preparing", "On the way", "Delivered", "Completed", "Cancelled"];
+const ORDER_STATUSES = ["Pending", "Preparing", "On the Way", "Delivered"];
+const REPORT_ORDER_STATUSES = [...ORDER_STATUSES, "Completed", "Cancelled"];
 const ADMIN_TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "reports", label: "Reports" },
@@ -886,7 +887,7 @@ function buildSalesReport(orders: AdminOrder[], range: ReportRange) {
   const completedSales = completedOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
   const averageOrder = salesOrders.length > 0 ? totalSales / salesOrders.length : 0;
 
-  const statusCounts = ORDER_STATUSES.map((status) => ({
+  const statusCounts = REPORT_ORDER_STATUSES.map((status) => ({
     status,
     count: rangedOrders.filter((order) => order.status === status).length,
   }));
