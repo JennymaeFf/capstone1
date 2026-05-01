@@ -8,7 +8,7 @@ as $$
 begin
   new.updated_at = now();
   return new;
-end;
+end;  
 $$;
 
 create or replace function public.is_admin()

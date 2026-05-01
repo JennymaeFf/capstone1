@@ -45,6 +45,7 @@ const CATEGORIES = [
   "Silog Combo Meals",
   "Bites Express",
   "Extras",
+  "Add-ons",
   "Siopao",
   "Beers",
 ];
@@ -254,24 +255,44 @@ export default function AdminPage() {
   };
 
   const submitRequirement = async () => {
-    await createMenuRequirement({
-      menu_item_id: requirementForm.menu_item_id,
-      inventory_item_id: requirementForm.inventory_item_id,
-      quantity_required: Number(requirementForm.quantity_required),
-    });
-    setRequirementForm({ menu_item_id: "", inventory_item_id: "", quantity_required: "1" });
-    await loadAdminData();
+    if (!requirementForm.menu_item_id || !requirementForm.inventory_item_id) {
+      setMessage("Please choose a menu item and an inventory item for the ingredient requirement.");
+      return;
+    }
+
+    try {
+      setMessage("");
+      await createMenuRequirement({
+        menu_item_id: requirementForm.menu_item_id,
+        inventory_item_id: requirementForm.inventory_item_id,
+        quantity_required: Math.max(1, Number(requirementForm.quantity_required)),
+      });
+      setRequirementForm({ menu_item_id: "", inventory_item_id: "", quantity_required: "1" });
+      await loadAdminData();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to add ingredient requirement.");
+    }
   };
 
   const submitAddon = async () => {
-    await createMenuAddon({
-      menu_item_id: addonForm.menu_item_id,
-      inventory_item_id: addonForm.inventory_item_id,
-      price_delta: Number(addonForm.price_delta),
-      quantity_required: Number(addonForm.quantity_required),
-    });
-    setAddonForm({ menu_item_id: "", inventory_item_id: "", price_delta: "0", quantity_required: "1" });
-    await loadAdminData();
+    if (!addonForm.menu_item_id || !addonForm.inventory_item_id) {
+      setMessage("Please choose a menu item and an add-on stock item.");
+      return;
+    }
+
+    try {
+      setMessage("");
+      await createMenuAddon({
+        menu_item_id: addonForm.menu_item_id,
+        inventory_item_id: addonForm.inventory_item_id,
+        price_delta: Math.max(0, Number(addonForm.price_delta)),
+        quantity_required: Math.max(1, Number(addonForm.quantity_required)),
+      });
+      setAddonForm({ menu_item_id: "", inventory_item_id: "", price_delta: "0", quantity_required: "1" });
+      await loadAdminData();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to add menu add-on.");
+    }
   };
 
   const sendMessageReply = async (id: string) => {
@@ -414,7 +435,7 @@ export default function AdminPage() {
             )}
 
             {activeTab === "menu" && (
-              <section>
+              <section className="space-y-5">
                 <Panel
                   title="Menu Inventory"
                   action={
@@ -516,6 +537,64 @@ export default function AdminPage() {
                     ])}
                   />
             </Panel>
+                <Panel
+                  title="Add-ons Menu Items"
+                  action={
+                    <button
+                      onClick={() => {
+                        setEditingMenuId("");
+                        setMenuForm({ ...EMPTY_MENU, category: "Add-ons" });
+                        setIsMenuFormOpen(true);
+                      }}
+                      className="rounded-lg bg-[#246b2d] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20]"
+                    >
+                      Add Add-on +
+                    </button>
+                  }
+                >
+                  <DataTable
+                    headers={["Name", "Price", "Image", "Status", "Actions"]}
+                    rows={menuItems.filter((item) => item.category === "Add-ons").map((item) => [
+                      item.name,
+                      `P${item.basePrice.toFixed(2)}`,
+                      item.image ? "Added" : "Missing",
+                      <span key={`${item.id}-status`} className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.isAvailable ? "bg-[#DDF8B1] text-[#174b21]" : "bg-red-50 text-red-600"}`}>
+                        {item.isAvailable ? "Available" : "Unavailable"}
+                      </span>,
+                      <RowActions
+                        key={item.id}
+                        onEdit={() => {
+                          setEditingMenuId(item.id);
+                          setIsMenuFormOpen(true);
+                          setMenuForm({
+                            name: item.name,
+                            category: "Add-ons",
+                            base_price: String(item.basePrice),
+                            image_url: item.image,
+                            description: item.description ?? "",
+                            is_manually_available: item.isManuallyAvailable,
+                          });
+                        }}
+                        onDelete={async () => {
+                          await deleteMenuItem(item.id);
+                          await loadAdminData();
+                        }}
+                        extraAction={{
+                          label: item.isManuallyAvailable ? "Set Unavailable" : "Set Available",
+                          onClick: async () => {
+                            await updateMenuItem(item.id, { is_manually_available: !item.isManuallyAvailable });
+                            await loadAdminData();
+                          },
+                        }}
+                      />,
+                    ])}
+                  />
+                  {menuItems.filter((item) => item.category === "Add-ons").length === 0 && (
+                    <p className="mt-3 rounded-lg border border-[#d8e5cc] bg-[#fbfdf8] px-3 py-2 text-sm text-[#6f625a]">
+                      No add-ons yet. Click Add Add-on + to create Extra Rice, Cheese, Pearls, or other add-ons.
+                    </p>
+                  )}
+                </Panel>
               </section>
             )}
 
@@ -567,12 +646,11 @@ export default function AdminPage() {
                     </div>
                   )}
                   <DataTable
-                    headers={["Name", "Type", "Stock", "Low At", "Actions"]}
+                    headers={["Name", "Type", "Stock", "Actions"]}
                     rows={inventory.map((item) => [
                       item.name,
                       item.inventory_type,
                       `${Number(item.quantity)} ${item.unit}`,
-                      `${Number(item.low_stock_level)} ${item.unit}`,
                       <RowActions
                         key={item.id}
                         onEdit={() => {
@@ -596,7 +674,10 @@ export default function AdminPage() {
                   />
                 </Panel>
                 <div className="grid gap-5 xl:grid-cols-2">
-            <Panel title="Menu Item Requirements">
+            <Panel title="Ingredients per Menu Item">
+              <p className="mb-3 text-xs text-[#6f625a]">
+                Use this for menu_item_inventory_requirements. Example: Burger needs Bun, Patty, and Cheese.
+              </p>
               <Select label="Menu Item" value={requirementForm.menu_item_id} options={menuItems.map((item) => item.id)} labels={Object.fromEntries(menuItems.map((item) => [item.id, item.name]))} onChange={(value) => setRequirementForm((p) => ({ ...p, menu_item_id: value }))} />
               <Select label="Inventory Item" value={requirementForm.inventory_item_id} options={inventory.map((item) => item.id)} labels={Object.fromEntries(inventory.map((item) => [item.id, `${item.name} (${item.inventory_type})`]))} onChange={(value) => setRequirementForm((p) => ({ ...p, inventory_item_id: value }))} />
               <Input label="Quantity used per order" type="number" value={requirementForm.quantity_required} onChange={(value) => setRequirementForm((p) => ({ ...p, quantity_required: value }))} />
@@ -612,7 +693,10 @@ export default function AdminPage() {
               />
             </Panel>
 
-            <Panel title="Add-ons / Extras">
+            <Panel title="Assigned Add-ons per Menu Item">
+              <p className="mb-3 text-xs text-[#6f625a]">
+                Use this for menu_item_addons. Example: Milk Tea can offer Pearls, Burger can offer Cheese.
+              </p>
               <Select label="Menu Item" value={addonForm.menu_item_id} options={menuItems.map((item) => item.id)} labels={Object.fromEntries(menuItems.map((item) => [item.id, item.name]))} onChange={(value) => setAddonForm((p) => ({ ...p, menu_item_id: value }))} />
               <Select label="Add-on Stock" value={addonForm.inventory_item_id} options={inventory.map((item) => item.id)} labels={Object.fromEntries(inventory.map((item) => [item.id, `${item.name} (${item.inventory_type}, ${Number(item.quantity)} ${item.unit})`]))} onChange={(value) => setAddonForm((p) => ({ ...p, inventory_item_id: value }))} />
               <Input label="Extra price" type="number" value={addonForm.price_delta} onChange={(value) => setAddonForm((p) => ({ ...p, price_delta: value }))} />
