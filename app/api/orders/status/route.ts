@@ -16,6 +16,7 @@ const ORDER_STATUSES = new Map([
   ["cancelled", "Cancelled"],
 ]);
 const EMAIL_STATUSES = new Set(["Pending", "Preparing", "On the way", "Delivered", "Completed"]);
+const INVENTORY_DEDUCTION_STATUSES = new Set(["Completed", "Delivered"]);
 
 function normalizeOrderStatus(status: string) {
   return ORDER_STATUSES.get(status.trim().toLowerCase()) ?? "";
@@ -66,7 +67,7 @@ type InventoryItemForDeduction = {
 };
 
 function normalizeInventoryName(name: string) {
-  return name.trim().toLowerCase();
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 async function getInventoryDeducted(serviceSupabase: SupabaseServiceClient, orderId: string) {
@@ -244,11 +245,12 @@ export async function POST(request: Request) {
 
     let inventoryDeducted = false;
     let inventoryClaimed = false;
-    const alreadyInventoryDeducted = status === "Completed"
+    const shouldDeductInventory = INVENTORY_DEDUCTION_STATUSES.has(status);
+    const alreadyInventoryDeducted = shouldDeductInventory
       ? await getInventoryDeducted(serviceSupabase, orderId)
       : false;
 
-    if (status === "Completed" && !alreadyInventoryDeducted) {
+    if (shouldDeductInventory && !alreadyInventoryDeducted) {
       const { data: claimedOrder, error: claimError } = await serviceSupabase
         .from("orders")
         .update({ status, inventory_deducted: true })
@@ -277,7 +279,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const updatePatch = status === "Completed" && inventoryClaimed
+    const updatePatch = shouldDeductInventory && inventoryClaimed
       ? { status, inventory_deducted: true }
       : { status };
 
@@ -291,7 +293,7 @@ export async function POST(request: Request) {
     if (updateError) {
       console.error("[orders/status] Supabase update failed", updateError, { orderId, status, updatePatch });
 
-      if (status === "Completed" && inventoryDeducted && isMissingInventoryDeductionColumn(updateError)) {
+      if (shouldDeductInventory && inventoryDeducted && isMissingInventoryDeductionColumn(updateError)) {
         return NextResponse.json(
           { error: "Database setup is missing orders.inventory_deducted. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again." },
           { status: 500 }

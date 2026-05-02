@@ -1065,6 +1065,7 @@ from (
   ('Silog Meat', 'ingredient', 40.00, 'serving', 8.00, null),
   ('Fish Ball', 'ingredient', 80.00, 'pcs', 20.00, null),
   ('Tempura', 'ingredient', 80.00, 'pcs', 20.00, null),
+  ('Japanese Siomai', 'ingredient', 100.00, 'pcs', 20.00, null),
   ('Siomai', 'ingredient', 100.00, 'pcs', 20.00, null),
   ('Siopao', 'ingredient', 30.00, 'pcs', 8.00, null),
   ('French Fries', 'ingredient', 20.00, 'pack', 4.00, null),
@@ -1084,6 +1085,15 @@ where not exists (
   from public.inventory_items existing
   where lower(trim(existing.name)) = lower(trim(seed.name))
 );
+
+insert into public.menu_item_inventory_requirements (menu_item_id, inventory_item_id, quantity_required)
+select menu.id, inventory.id, 1
+from public.menu_items menu
+join public.inventory_items inventory
+  on lower(regexp_replace(trim(inventory.name), '\s+', ' ', 'g')) = lower('Japanese Siomai')
+where lower(regexp_replace(trim(menu.name), '\s+', ' ', 'g')) = lower('Japanese Siomai')
+on conflict (menu_item_id, inventory_item_id) do update
+set quantity_required = excluded.quantity_required;
 
 -- After creating your own user, make that user an admin with:
 -- update public.app_users set role = 'admin' where id = 'YOUR_USER_ID';
