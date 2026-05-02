@@ -23,6 +23,7 @@ create table if not exists public.contact_messages (
   name text not null,
   email text not null,
   message text not null check (char_length(message) <= 1000),
+  sender_role text not null default 'customer' check (sender_role in ('customer', 'admin')),
   admin_reply text,
   customer_reply text,
   status text not null default 'Unread' check (status in ('Unread', 'Read', 'Replied')),
@@ -33,6 +34,9 @@ create table if not exists public.contact_messages (
 );
 
 alter table public.contact_messages enable row level security;
+
+alter table public.contact_messages
+add column if not exists sender_role text not null default 'customer';
 
 alter table public.contact_messages
 add column if not exists customer_reply text;
@@ -47,6 +51,13 @@ alter table public.contact_messages
 add constraint contact_messages_message_length_check
 check (char_length(message) <= 1000);
 
+alter table public.contact_messages
+drop constraint if exists contact_messages_sender_role_check;
+
+alter table public.contact_messages
+add constraint contact_messages_sender_role_check
+check (sender_role in ('customer', 'admin'));
+
 create index if not exists contact_messages_user_id_created_at_idx
 on public.contact_messages (user_id, created_at desc);
 
@@ -56,7 +67,12 @@ on public.contact_messages (status, created_at desc);
 drop policy if exists "Users can create own contact messages" on public.contact_messages;
 create policy "Users can create own contact messages"
 on public.contact_messages for insert
-with check (auth.uid() = user_id);
+with check (auth.uid() = user_id and sender_role = 'customer');
+
+drop policy if exists "Admins can create admin contact messages" on public.contact_messages;
+create policy "Admins can create admin contact messages"
+on public.contact_messages for insert
+with check (public.is_admin() and sender_role = 'admin');
 
 drop policy if exists "Users and admins can view contact messages" on public.contact_messages;
 create policy "Users and admins can view contact messages"

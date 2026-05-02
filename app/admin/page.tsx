@@ -956,15 +956,14 @@ function shortenText(text: string, maxLength: number) {
 function buildContactMessageTimeline(messages: AdminMessage[]): MessageBubbleItem[] {
   return messages
     .flatMap((message) => {
-      const items: MessageBubbleItem[] = [
-        {
-          id: `${message.id}-customer-message`,
-          sender: "customer",
-          label: message.name,
-          text: message.message,
-          date: message.created_at,
-        },
-      ];
+      const isAdminMessage = message.sender_role === "admin";
+      const items: MessageBubbleItem[] = [{
+        id: `${message.id}-${isAdminMessage ? "admin" : "customer"}-message`,
+        sender: isAdminMessage ? "admin" : "customer",
+        label: isAdminMessage ? "Admin" : message.name,
+        text: message.message,
+        date: message.created_at,
+      }];
 
       if (message.admin_reply) {
         items.push({

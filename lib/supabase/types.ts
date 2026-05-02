@@ -348,6 +348,7 @@ export type Database = {
           name: string;
           email: string;
           message: string;
+          sender_role: "admin" | "customer";
           admin_reply: string | null;
           customer_reply: string | null;
           status: "Unread" | "Read" | "Replied";
@@ -362,6 +363,7 @@ export type Database = {
           name: string;
           email: string;
           message: string;
+          sender_role?: "admin" | "customer";
           admin_reply?: string | null;
           customer_reply?: string | null;
           status?: "Unread" | "Read" | "Replied";
@@ -376,6 +378,7 @@ export type Database = {
           name?: string;
           email?: string;
           message?: string;
+          sender_role?: "admin" | "customer";
           admin_reply?: string | null;
           customer_reply?: string | null;
           status?: "Unread" | "Read" | "Replied";

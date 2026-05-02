@@ -763,6 +763,7 @@ export async function createContactMessage(input: { name: string; email: string;
     .from("contact_messages")
     .select("created_at")
     .eq("user_id", user.id)
+    .eq("sender_role", "customer")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -787,6 +788,7 @@ export async function createContactMessage(input: { name: string; email: string;
       name,
       email,
       message,
+      sender_role: "customer",
       status: "Unread",
       customer_seen: true,
     })
@@ -810,7 +812,7 @@ export async function getMyContactMessages() {
     .from("contact_messages")
     .select("*")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   if (error) {
     if (isMissingContactMessagesTable(error)) throw contactMessagesSetupError();
@@ -825,11 +827,10 @@ export async function getUnreadContactReplyCount() {
   const user = await getCurrentSessionUser();
   if (!user) return 0;
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("contact_messages")
-    .select("id", { count: "exact", head: true })
+    .select("id, sender_role, admin_reply, customer_seen")
     .eq("user_id", user.id)
-    .not("admin_reply", "is", null)
     .eq("customer_seen", false);
 
   if (error) {
@@ -837,7 +838,7 @@ export async function getUnreadContactReplyCount() {
     throw error;
   }
 
-  return count ?? 0;
+  return (data ?? []).filter((message) => message.sender_role === "admin" || Boolean(message.admin_reply)).length;
 }
 
 export async function markMyContactRepliesSeen() {
@@ -845,16 +846,28 @@ export async function markMyContactRepliesSeen() {
   const user = await getCurrentSessionUser();
   if (!user) return;
 
-  const { error } = await supabase
+  const { error: roleError } = await supabase
+    .from("contact_messages")
+    .update({ customer_seen: true })
+    .eq("user_id", user.id)
+    .eq("sender_role", "admin")
+    .eq("customer_seen", false);
+
+  if (roleError) {
+    if (isMissingContactMessagesTable(roleError)) throw contactMessagesSetupError();
+    if (!roleError.message.toLowerCase().includes("sender_role")) throw roleError;
+  }
+
+  const { error: legacyError } = await supabase
     .from("contact_messages")
     .update({ customer_seen: true })
     .eq("user_id", user.id)
     .not("admin_reply", "is", null)
     .eq("customer_seen", false);
 
-  if (error) {
-    if (isMissingContactMessagesTable(error)) throw contactMessagesSetupError();
-    throw error;
+  if (legacyError) {
+    if (isMissingContactMessagesTable(legacyError)) throw contactMessagesSetupError();
+    throw legacyError;
   }
 }
 
@@ -869,22 +882,35 @@ export async function replyToMyContactMessage(id: string, reply: string) {
   const user = await getCurrentSessionUser();
   if (!user) throw new Error("Please log in before replying.");
 
+  const { data: sourceMessage, error: sourceError } = await supabase
+    .from("contact_messages")
+    .select("name, email")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (sourceError) {
+    if (isMissingContactMessagesTable(sourceError)) throw contactMessagesSetupError();
+    throw sourceError;
+  }
+
   const { data, error } = await supabase
     .from("contact_messages")
-    .update({
-      customer_reply: trimmedReply,
-      customer_replied_at: new Date().toISOString(),
+    .insert({
+      user_id: user.id,
+      name: sourceMessage.name,
+      email: sourceMessage.email,
+      message: trimmedReply,
+      sender_role: "customer",
       status: "Unread",
       customer_seen: true,
     })
-    .eq("id", id)
-    .eq("user_id", user.id)
     .select("*")
     .single();
 
   if (error) {
     if (isMissingContactMessagesTable(error)) throw contactMessagesSetupError();
-    if (error.message.toLowerCase().includes("customer_reply") || error.message.toLowerCase().includes("customer_replied_at")) {
+    if (error.message.toLowerCase().includes("sender_role")) {
       throw new Error("Customer replies are not set up yet. Run supabase/contact_messages_setup.sql in Supabase SQL Editor, then refresh this page.");
     }
     throw error;
@@ -898,7 +924,7 @@ export async function getAdminContactMessages() {
   const { data, error } = await supabase
     .from("contact_messages")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   if (error) {
     if (isMissingContactMessagesTable(error)) throw contactMessagesSetupError();
@@ -930,15 +956,28 @@ export async function replyToContactMessage(id: string, reply: string) {
   if (!trimmedReply) throw new Error("Please write a reply before sending.");
 
   const supabase = getSupabaseBrowserClient();
+  const { data: sourceMessage, error: sourceError } = await supabase
+    .from("contact_messages")
+    .select("user_id, name, email")
+    .eq("id", id)
+    .single();
+
+  if (sourceError) {
+    if (isMissingContactMessagesTable(sourceError)) throw contactMessagesSetupError();
+    throw sourceError;
+  }
+
   const { data, error } = await supabase
     .from("contact_messages")
-    .update({
-      admin_reply: trimmedReply,
+    .insert({
+      user_id: sourceMessage.user_id,
+      name: sourceMessage.name,
+      email: sourceMessage.email,
+      message: trimmedReply,
+      sender_role: "admin",
       status: "Replied",
       customer_seen: false,
-      replied_at: new Date().toISOString(),
     })
-    .eq("id", id)
     .select("*")
     .single();
 

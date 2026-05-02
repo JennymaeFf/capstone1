@@ -44,7 +44,7 @@ export default function CustomerChatWidget() {
   );
   const timeline = useMemo(() => buildCustomerMessageTimeline(sortedMessages), [sortedMessages]);
   const latestMessage = timeline[timeline.length - 1];
-  const unreadCount = sortedMessages.filter((message) => message.admin_reply && !message.customer_seen).length;
+  const unreadCount = sortedMessages.filter((message) => !message.customer_seen && (message.sender_role === "admin" || Boolean(message.admin_reply))).length;
   const preview = latestMessage ? shortenText(latestMessage.text, 52) : "Send us a message";
 
   const loadMessages = useCallback(async () => {
@@ -269,15 +269,14 @@ function CustomerWidgetBubble({ align, label, text, date }: { align: "left" | "r
 function buildCustomerMessageTimeline(messages: ContactMessage[]): CustomerChatBubbleItem[] {
   return messages
     .flatMap((message) => {
-      const items: CustomerChatBubbleItem[] = [
-        {
-          id: `${message.id}-customer-message`,
-          sender: "customer",
-          label: "You",
-          text: message.message,
-          date: message.created_at,
-        },
-      ];
+      const isAdminMessage = message.sender_role === "admin";
+      const items: CustomerChatBubbleItem[] = [{
+        id: `${message.id}-${isAdminMessage ? "admin" : "customer"}-message`,
+        sender: isAdminMessage ? "admin" : "customer",
+        label: isAdminMessage ? "Admin" : "You",
+        text: message.message,
+        date: message.created_at,
+      }];
 
       if (message.admin_reply) {
         items.push({
