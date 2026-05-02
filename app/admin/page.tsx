@@ -335,9 +335,10 @@ export default function AdminPage() {
         },
         body: JSON.stringify({ orderId, status }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({ error: "Server returned an invalid response." }));
 
       if (!response.ok) {
+        console.error("[admin/orders] status update failed", result, { orderId, status });
         throw new Error(result.error || "Unable to update order status.");
       }
 
@@ -826,104 +827,101 @@ function AdminMessagesPanel({
     );
   }, [messages]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
-  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0];
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
   const replyTarget = selectedConversation?.messages[selectedConversation.messages.length - 1];
 
   return (
     <Panel title="Customer Messages">
       {messages.length === 0 ? (
         <p className="rounded-lg border border-[#eef3e8] bg-[#fbfdf8] px-3 py-8 text-center text-sm text-[#7b7169]">No messages yet.</p>
+      ) : selectedConversation && replyTarget ? (
+        <div className="overflow-hidden rounded-lg border border-[#e4eddb] bg-[#f6faef]">
+          <div className="flex items-center gap-3 border-b border-[#e4eddb] bg-white px-4 py-3">
+            <button
+              onClick={() => setSelectedConversationId("")}
+              className="rounded-lg border border-[#cbdcbe] px-3 py-1.5 text-xs font-bold text-[#174b21] transition hover:bg-[#edf5e5]"
+            >
+              Back
+            </button>
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
+              {getInitials(selectedConversation.name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-extrabold text-[#174b21]">{selectedConversation.name}</p>
+              <p className="truncate text-xs text-[#6f625a]">{selectedConversation.email}</p>
+            </div>
+          </div>
+
+          <div className="max-h-[520px] min-h-[360px] space-y-4 overflow-y-auto px-4 py-4">
+            {selectedConversation.messages.map((item) => (
+              <div key={item.id} className="space-y-2">
+                <ChatBubble align="left" label={item.name} text={item.message} date={item.created_at} />
+                {item.admin_reply && <ChatBubble align="right" label="Admin" text={item.admin_reply} date={item.replied_at ?? item.created_at} />}
+                {item.customer_reply && (
+                  <ChatBubble align="left" label={item.name} text={item.customer_reply} date={item.customer_replied_at ?? item.created_at} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-[#e4eddb] bg-white p-3">
+            <textarea
+              value={replyDrafts[replyTarget.id] ?? ""}
+              onChange={(event) => onReplyChange(replyTarget.id, event.target.value)}
+              placeholder="Write admin reply..."
+              className="h-20 w-full resize-none rounded-lg border border-[#cbdcbe] bg-[#fbfdf8] px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:bg-white focus:ring-2 focus:ring-[#cfe8bc]"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => void onReply(replyTarget.id)}
+                disabled={!replyDrafts[replyTarget.id]?.trim()}
+                className="rounded-lg bg-[#246b2d] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
-        <div className="grid overflow-hidden rounded-lg border border-[#e4eddb] bg-[#fbfdf8] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="border-b border-[#e4eddb] bg-white lg:border-b-0 lg:border-r">
-            <div className="border-b border-[#eef3e8] px-3 py-3">
-              <p className="text-xs font-bold uppercase text-[#5f8f49]">Inbox</p>
-            </div>
-            <div className="max-h-[620px] overflow-y-auto">
-              {conversations.map((conversation) => (
-                <button
-                  key={conversation.id}
-                  onClick={() => {
-                    setSelectedConversationId(conversation.id);
-                    conversation.messages
-                      .filter((item) => item.status === "Unread")
-                      .forEach((item) => void onMarkRead(item.id));
-                  }}
-                  className={`flex w-full items-start gap-3 border-b border-[#f0f4eb] px-3 py-3 text-left transition ${
-                    selectedConversation?.id === conversation.id ? "bg-[#edf5e5]" : "bg-white hover:bg-[#f8fbf4]"
-                  }`}
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
-                    {getInitials(conversation.name)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-extrabold text-[#174b21]">{conversation.name}</span>
-                      <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(conversation.latest.created_at)}</span>
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-[#6f625a]">{getMessagePreview(conversation.latest)}</span>
-                  </span>
-                  {conversation.unreadCount > 0 && (
-                    <span className="mt-1 rounded-full bg-[#f57c00] px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex min-h-[560px] flex-col bg-[#f6faef]">
-            {selectedConversation && replyTarget ? (
-              <>
-                <div className="border-b border-[#e4eddb] bg-white px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
-                      {getInitials(selectedConversation.name)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-extrabold text-[#174b21]">{selectedConversation.name}</p>
-                      <p className="truncate text-xs text-[#6f625a]">{selectedConversation.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-                  {selectedConversation.messages.map((item) => (
-                    <div key={item.id} className="space-y-2">
-                      <ChatBubble align="left" label={item.name} text={item.message} date={item.created_at} />
-                      {item.admin_reply && <ChatBubble align="right" label="Admin" text={item.admin_reply} date={item.replied_at ?? item.created_at} />}
-                      {item.customer_reply && (
-                        <ChatBubble align="left" label={item.name} text={item.customer_reply} date={item.customer_replied_at ?? item.created_at} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-[#e4eddb] bg-white p-3">
-                  <textarea
-                    value={replyDrafts[replyTarget.id] ?? ""}
-                    onChange={(event) => onReplyChange(replyTarget.id, event.target.value)}
-                    placeholder="Write admin reply..."
-                    className="h-20 w-full resize-none rounded-lg border border-[#cbdcbe] bg-[#fbfdf8] px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:bg-white focus:ring-2 focus:ring-[#cfe8bc]"
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      onClick={() => void onReply(replyTarget.id)}
-                      disabled={!replyDrafts[replyTarget.id]?.trim()}
-                      className="rounded-lg bg-[#246b2d] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-4 text-sm text-[#7b7169]">Select a conversation.</div>
-            )}
-          </div>
+        <div className="grid gap-3">
+          {conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              onClick={() => {
+                setSelectedConversationId(conversation.id);
+                conversation.messages
+                  .filter((item) => item.status === "Unread")
+                  .forEach((item) => void onMarkRead(item.id));
+              }}
+              className="flex w-full items-start gap-3 rounded-lg border border-[#e4eddb] bg-white px-4 py-3 text-left shadow-sm transition hover:border-[#b8d7a8] hover:bg-[#f8fbf4]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
+                {getInitials(conversation.name)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-extrabold text-[#174b21]">{conversation.name}</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(conversation.latest.created_at)}</span>
+                </span>
+                <span className="mt-1 block truncate text-xs text-[#6f625a]">{shortenText(getMessagePreview(conversation.latest), 86)}</span>
+              </span>
+              {conversation.unreadCount > 0 && (
+                <span className="mt-1 rounded-full bg-[#f57c00] px-2 py-0.5 text-[10px] font-bold text-white">
+                  {conversation.unreadCount}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
     </Panel>
   );
+}
+
+function shortenText(text: string, maxLength: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
 }
 
 function ChatBubble({ align, label, text, date }: { align: "left" | "right"; label: string; text: string; date: string }) {

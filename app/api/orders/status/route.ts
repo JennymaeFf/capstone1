@@ -21,6 +21,22 @@ function normalizeOrderStatus(status: string) {
   return ORDER_STATUSES.get(status.trim().toLowerCase()) ?? "";
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const details = error as { message?: string; details?: string; hint?: string; code?: string };
+    return [details.message, details.details, details.hint, details.code ? `Code: ${details.code}` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return "Unknown error";
+}
+
+function isMissingInventoryDeductionColumn(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes("inventory_deducted_at") || message.includes("schema cache");
+}
+
 type OrderItemForEmail = {
   item_name: string;
   quantity: number;
@@ -35,6 +51,23 @@ type InventoryRequirement = {
   quantity_required: number;
   inventory_items: { id: string; name: string; quantity: number } | { id: string; name: string; quantity: number }[] | null;
 };
+
+async function getInventoryDeductedAt(serviceSupabase: SupabaseServiceClient, orderId: string) {
+  const { data, error } = await serviceSupabase
+    .from("orders")
+    .select("inventory_deducted_at")
+    .eq("id", orderId)
+    .single();
+
+  if (error) {
+    if (isMissingInventoryDeductionColumn(error)) {
+      throw new Error("Database setup is missing orders.inventory_deducted_at. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again.");
+    }
+    throw error;
+  }
+
+  return data.inventory_deducted_at as string | null;
+}
 
 async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orderId: string) {
   const { data: orderItems, error: orderItemsError } = await serviceSupabase
@@ -141,40 +174,75 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     }
 
+    console.log("[orders/status] request", { orderId, status, adminId: sessionUser.user.id });
+
     const { data: currentOrder, error: currentOrderError } = await serviceSupabase
       .from("orders")
-      .select("id, status, inventory_deducted_at")
+      .select("id, status")
       .eq("id", orderId)
       .single();
 
-    if (currentOrderError) throw currentOrderError;
-
-    const { error: updateError } = await serviceSupabase
-      .from("orders")
-      .update({ status })
-      .eq("id", orderId)
-      .select("id")
-      .single();
-
-    if (updateError) throw updateError;
+    if (currentOrderError) {
+      console.error("[orders/status] current order lookup failed", currentOrderError, { orderId, status });
+      throw currentOrderError;
+    }
+    console.log("[orders/status] current order found", { orderId: currentOrder.id, previousStatus: currentOrder.status, nextStatus: status });
 
     let inventoryDeducted = false;
+    const inventoryDeductedAt = status === "Completed"
+      ? await getInventoryDeductedAt(serviceSupabase, orderId)
+      : null;
 
-    if (status === "Completed" && !currentOrder.inventory_deducted_at) {
+    if (status === "Completed" && !inventoryDeductedAt) {
       try {
         await deductOrderInventory(serviceSupabase, orderId);
-        const { error: deductedAtError } = await serviceSupabase
-          .from("orders")
-          .update({ inventory_deducted_at: new Date().toISOString() })
-          .eq("id", orderId)
-          .is("inventory_deducted_at", null);
-
-        if (deductedAtError) throw deductedAtError;
+        inventoryDeducted = true;
       } catch (error) {
-        await serviceSupabase.from("orders").update({ status: currentOrder.status }).eq("id", orderId);
+        console.error("[orders/status] inventory deduction failed", error, { orderId, status });
         throw error;
       }
-      inventoryDeducted = true;
+    }
+
+    const updatePatch = status === "Completed" && inventoryDeducted
+      ? { status, inventory_deducted_at: new Date().toISOString() }
+      : { status };
+
+    const { data: savedOrder, error: updateError } = await serviceSupabase
+      .from("orders")
+      .update(updatePatch)
+      .eq("id", orderId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      console.error("[orders/status] Supabase update failed", updateError, { orderId, status, updatePatch });
+
+      if (status === "Completed" && inventoryDeducted && isMissingInventoryDeductionColumn(updateError)) {
+        return NextResponse.json(
+          { error: "Database setup is missing orders.inventory_deducted_at. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again." },
+          { status: 500 }
+        );
+      }
+
+      throw updateError;
+    }
+
+    if (!savedOrder) {
+      console.error("[orders/status] Supabase update returned no order", { orderId, status });
+      return NextResponse.json({ error: "Order update did not return a saved row. Please verify the order ID exists." }, { status: 404 });
+    }
+
+    if (status === "Completed" && inventoryDeducted && !("inventory_deducted_at" in savedOrder)) {
+      const { error: markerError } = await serviceSupabase
+        .from("orders")
+        .update({ inventory_deducted_at: new Date().toISOString() })
+        .eq("id", orderId)
+        .is("inventory_deducted_at", null);
+
+      if (markerError) {
+        console.error("[orders/status] inventory marker update failed", markerError, { orderId, status });
+        throw markerError;
+      }
     }
 
     const { data: updatedOrder, error: updatedOrderError } = await serviceSupabase
@@ -183,14 +251,20 @@ export async function POST(request: Request) {
       .eq("id", orderId)
       .single();
 
-    if (updatedOrderError) throw updatedOrderError;
+    if (updatedOrderError) {
+      console.error("[orders/status] updated order fetch failed", updatedOrderError, { orderId, status });
+      throw updatedOrderError;
+    }
 
     const { data: orderItems, error: orderItemsError } = await serviceSupabase
       .from("order_items")
       .select("item_name, quantity, unit_price, size_label")
       .eq("order_id", updatedOrder.id);
 
-    if (orderItemsError) throw orderItemsError;
+    if (orderItemsError) {
+      console.error("[orders/status] order items fetch failed", orderItemsError, { orderId, status });
+      throw orderItemsError;
+    }
 
     let emailSent = false;
     let emailWarning = "";
@@ -232,7 +306,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ order: updatedOrder, emailSent, warning: emailWarning, inventoryDeducted });
   } catch (error) {
-    console.error("[orders/status]", error);
-    return NextResponse.json({ error: "Unable to update order status right now." }, { status: 500 });
+    const message = getErrorMessage(error);
+    console.error("[orders/status]", error, { message });
+    return NextResponse.json({ error: message || "Unable to update order status right now." }, { status: 500 });
   }
 }
