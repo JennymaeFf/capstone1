@@ -51,7 +51,7 @@ const CATEGORIES = [
 ];
 
 const INVENTORY_TYPES: InventoryType[] = ["ingredient", "packaging", "addon", "beverage"];
-const ORDER_STATUSES = ["Pending", "Preparing", "On the Way", "Delivered"];
+const ORDER_STATUSES = ["Pending", "Preparing", "On the way", "Delivered"];
 const REPORT_ORDER_STATUSES = [...ORDER_STATUSES, "Completed", "Cancelled"];
 const ADMIN_TABS = [
   { id: "dashboard", label: "Dashboard" },
@@ -349,6 +349,11 @@ export default function AdminPage() {
         setMessage("Order status updated.");
       }
 
+      if (result.order) {
+        setOrders((previous) =>
+          previous.map((order) => (order.id === orderId ? { ...order, ...result.order } : order))
+        );
+      }
       await loadAdminData();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to update order status.");

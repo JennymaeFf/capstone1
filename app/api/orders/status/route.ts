@@ -4,7 +4,22 @@ import { getSupabaseServerClient, getSupabaseServiceClient } from "@/lib/supabas
 
 export const runtime = "nodejs";
 
-const EMAIL_STATUSES = new Set(["pending", "preparing", "on the way", "delivered"]);
+const ORDER_STATUSES = new Map([
+  ["pending", "Pending"],
+  ["preparing", "Preparing"],
+  ["on the way", "On the way"],
+  ["on the-way", "On the way"],
+  ["ontheway", "On the way"],
+  ["on theway", "On the way"],
+  ["delivered", "Delivered"],
+  ["completed", "Completed"],
+  ["cancelled", "Cancelled"],
+]);
+const EMAIL_STATUSES = new Set(["Pending", "Preparing", "On the way", "Delivered"]);
+
+function normalizeOrderStatus(status: string) {
+  return ORDER_STATUSES.get(status.trim().toLowerCase()) ?? "";
+}
 
 type OrderItemForEmail = {
   item_name: string;
@@ -24,11 +39,11 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const orderId = typeof body.orderId === "string" ? body.orderId : "";
-    const status = typeof body.status === "string" ? body.status.trim() : "";
+    const status = typeof body.status === "string" ? normalizeOrderStatus(body.status) : "";
     const rider = typeof body.rider === "object" && body.rider !== null ? body.rider : undefined;
 
     if (!orderId || !status) {
-      return NextResponse.json({ error: "Order ID and status are required." }, { status: 400 });
+      return NextResponse.json({ error: "Order ID and a valid status are required." }, { status: 400 });
     }
 
     const serverSupabase = getSupabaseServerClient();
@@ -50,14 +65,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     }
 
-    const { data: updatedOrder, error: updateError } = await serviceSupabase
+    const { error: updateError } = await serviceSupabase
       .from("orders")
       .update({ status })
       .eq("id", orderId)
-      .select("*")
+      .select("id")
       .single();
 
     if (updateError) throw updateError;
+
+    const { data: updatedOrder, error: updatedOrderError } = await serviceSupabase
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .single();
+
+    if (updatedOrderError) throw updatedOrderError;
 
     const { data: orderItems, error: orderItemsError } = await serviceSupabase
       .from("order_items")
@@ -69,7 +92,7 @@ export async function POST(request: Request) {
     let emailSent = false;
     let emailWarning = "";
 
-    if (EMAIL_STATUSES.has(status.toLowerCase())) {
+    if (EMAIL_STATUSES.has(updatedOrder.status)) {
       const [{ data: profile }, { data: authUser, error: authUserError }] = await Promise.all([
         serviceSupabase.from("profiles").select("full_name").eq("id", updatedOrder.user_id).maybeSingle(),
         serviceSupabase.auth.admin.getUserById(updatedOrder.user_id),
@@ -85,7 +108,7 @@ export async function POST(request: Request) {
             to: authUser.user.email,
             customerName: profile?.full_name || authUser.user.email,
             orderNumber: updatedOrder.id.slice(-12),
-            status,
+            status: updatedOrder.status,
             items: ((orderItems ?? []) as OrderItemForEmail[]).map((item) => ({
               name: item.item_name,
               quantity: Number(item.quantity),
