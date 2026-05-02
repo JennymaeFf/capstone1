@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useAuthProfile } from "@/components/use-auth-profile";
@@ -14,6 +14,13 @@ import {
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ChatView = "list" | "chat";
+type CustomerChatBubbleItem = {
+  id: string;
+  sender: "admin" | "customer";
+  label: string;
+  text: string;
+  date: string;
+};
 
 const HIDDEN_PATH_PREFIXES = ["/admin", "/login", "/register", "/verify", "/verify-login", "/check-email"];
 
@@ -28,15 +35,17 @@ export default function CustomerChatWidget() {
   const [error, setError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const customerThreadEndRef = useRef<HTMLDivElement>(null);
 
   const isHidden = HIDDEN_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
     [messages]
   );
-  const latestMessage = sortedMessages[sortedMessages.length - 1];
+  const timeline = useMemo(() => buildCustomerMessageTimeline(sortedMessages), [sortedMessages]);
+  const latestMessage = timeline[timeline.length - 1];
   const unreadCount = sortedMessages.filter((message) => message.admin_reply && !message.customer_seen).length;
-  const preview = latestMessage ? shortenText(getMessagePreview(latestMessage), 52) : "Send us a message";
+  const preview = latestMessage ? shortenText(latestMessage.text, 52) : "Send us a message";
 
   const loadMessages = useCallback(async () => {
     if (!isLoggedIn) return;
@@ -72,6 +81,12 @@ export default function CustomerChatWidget() {
       }
     };
   }, [isLoggedIn, userId, isHidden, loadMessages]);
+
+  useEffect(() => {
+    if (isOpen && view === "chat") {
+      customerThreadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [isOpen, view, timeline.length]);
 
   if (isHidden || isLoading) return null;
 
@@ -149,7 +164,7 @@ export default function CustomerChatWidget() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-extrabold text-[#174b21]">Indabest Admin</span>
-                    {latestMessage && <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(latestMessage.created_at)}</span>}
+                    {latestMessage && <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(latestMessage.date)}</span>}
                   </span>
                   <span className="mt-1 block truncate text-xs text-[#6f625a]">{preview}</span>
                 </span>
@@ -175,17 +190,20 @@ export default function CustomerChatWidget() {
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto bg-[#f6faef] px-3 py-4">
-                {sortedMessages.length === 0 ? (
+                {timeline.length === 0 ? (
                   <p className="rounded-xl bg-white px-3 py-3 text-sm text-[#6f625a] shadow-sm">Start a conversation with Indabest Admin.</p>
                 ) : (
-                  sortedMessages.map((message) => (
-                    <div key={message.id} className="space-y-2">
-                      <CustomerWidgetBubble align="left" label="You" text={message.message} date={message.created_at} />
-                      {message.admin_reply && <CustomerWidgetBubble align="right" label="Admin" text={message.admin_reply} date={message.replied_at ?? message.created_at} />}
-                      {message.customer_reply && <CustomerWidgetBubble align="left" label="You" text={message.customer_reply} date={message.customer_replied_at ?? message.created_at} />}
-                    </div>
+                  timeline.map((message) => (
+                    <CustomerWidgetBubble
+                      key={message.id}
+                      align={message.sender === "customer" ? "right" : "left"}
+                      label={message.label}
+                      text={message.text}
+                      date={message.date}
+                    />
                   ))
                 )}
+                <div ref={customerThreadEndRef} />
               </div>
 
               <div className="border-t border-[#eef3e8] bg-white p-3">
@@ -248,8 +266,42 @@ function CustomerWidgetBubble({ align, label, text, date }: { align: "left" | "r
   );
 }
 
-function getMessagePreview(message: ContactMessage) {
-  return message.customer_reply || message.admin_reply || message.message;
+function buildCustomerMessageTimeline(messages: ContactMessage[]): CustomerChatBubbleItem[] {
+  return messages
+    .flatMap((message) => {
+      const items: CustomerChatBubbleItem[] = [
+        {
+          id: `${message.id}-customer-message`,
+          sender: "customer",
+          label: "You",
+          text: message.message,
+          date: message.created_at,
+        },
+      ];
+
+      if (message.admin_reply) {
+        items.push({
+          id: `${message.id}-admin-reply`,
+          sender: "admin",
+          label: "Admin",
+          text: message.admin_reply,
+          date: message.replied_at ?? message.created_at,
+        });
+      }
+
+      if (message.customer_reply) {
+        items.push({
+          id: `${message.id}-customer-reply`,
+          sender: "customer",
+          label: "You",
+          text: message.customer_reply,
+          date: message.customer_replied_at ?? message.created_at,
+        });
+      }
+
+      return items;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 function shortenText(text: string, maxLength: number) {

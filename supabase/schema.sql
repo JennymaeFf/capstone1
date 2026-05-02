@@ -186,6 +186,7 @@ create table if not exists public.orders (
   selected_bank text check (selected_bank is null or selected_bank in ('Landbank', 'BDO', 'BPI')),
   payment_reference text,
   payment_proof_url text,
+  inventory_deducted boolean not null default false,
   inventory_deducted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -262,6 +263,9 @@ add column if not exists payment_reference text;
 
 alter table public.orders
 add column if not exists payment_proof_url text;
+
+alter table public.orders
+add column if not exists inventory_deducted boolean not null default false;
 
 alter table public.orders
 add column if not exists inventory_deducted_at timestamptz;

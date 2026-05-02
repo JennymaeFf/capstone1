@@ -34,7 +34,7 @@ function getErrorMessage(error: unknown) {
 
 function isMissingInventoryDeductionColumn(error: unknown) {
   const message = getErrorMessage(error).toLowerCase();
-  return message.includes("inventory_deducted_at") || message.includes("schema cache");
+  return message.includes("inventory_deducted") || message.includes("schema cache");
 }
 
 type OrderItemForEmail = {
@@ -47,26 +47,43 @@ type OrderItemForEmail = {
 type SupabaseServiceClient = ReturnType<typeof getSupabaseServiceClient>;
 
 type InventoryRequirement = {
+  menu_item_id?: string;
   inventory_item_id: string;
   quantity_required: number;
   inventory_items: { id: string; name: string; quantity: number } | { id: string; name: string; quantity: number }[] | null;
 };
 
-async function getInventoryDeductedAt(serviceSupabase: SupabaseServiceClient, orderId: string) {
+type OrderItemForInventory = {
+  menu_item_id: string | null;
+  item_name: string;
+  quantity: number;
+};
+
+type InventoryItemForDeduction = {
+  id: string;
+  name: string;
+  quantity: number;
+};
+
+function normalizeInventoryName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+async function getInventoryDeducted(serviceSupabase: SupabaseServiceClient, orderId: string) {
   const { data, error } = await serviceSupabase
     .from("orders")
-    .select("inventory_deducted_at")
+    .select("inventory_deducted")
     .eq("id", orderId)
     .single();
 
   if (error) {
     if (isMissingInventoryDeductionColumn(error)) {
-      throw new Error("Database setup is missing orders.inventory_deducted_at. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again.");
+      throw new Error("Database setup is missing orders.inventory_deducted. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again.");
     }
     throw error;
   }
 
-  return data.inventory_deducted_at as string | null;
+  return Boolean(data.inventory_deducted);
 }
 
 async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orderId: string) {
@@ -77,31 +94,43 @@ async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orde
 
   if (orderItemsError) throw orderItemsError;
 
-  const menuItemIds = Array.from(new Set((orderItems ?? []).map((item) => item.menu_item_id).filter((id): id is string => Boolean(id))));
-  if (menuItemIds.length === 0) return 0;
+  const orderItemRows = (orderItems ?? []) as OrderItemForInventory[];
+  if (orderItemRows.length === 0) return 0;
 
-  const { data: requirements, error: requirementsError } = await serviceSupabase
-    .from("menu_item_inventory_requirements")
-    .select("menu_item_id, inventory_item_id, quantity_required, inventory_items(id, name, quantity)")
-    .in("menu_item_id", menuItemIds);
+  const menuItemIds = Array.from(new Set(orderItemRows.map((item) => item.menu_item_id).filter((id): id is string => Boolean(id))));
+  const { data: requirements, error: requirementsError } = menuItemIds.length > 0
+    ? await serviceSupabase
+        .from("menu_item_inventory_requirements")
+        .select("menu_item_id, inventory_item_id, quantity_required, inventory_items(id, name, quantity)")
+        .in("menu_item_id", menuItemIds)
+    : { data: [], error: null };
 
   if (requirementsError) throw requirementsError;
 
+  const { data: inventoryItems, error: inventoryError } = await serviceSupabase
+    .from("inventory_items")
+    .select("id, name, quantity");
+
+  if (inventoryError) throw inventoryError;
+
+  const inventoryByName = new Map(
+    ((inventoryItems ?? []) as InventoryItemForDeduction[]).map((item) => [normalizeInventoryName(item.name), item])
+  );
   const requiredByInventoryId = new Map<string, { name: string; currentQuantity: number; requiredQuantity: number }>();
+  const unmatchedItems: string[] = [];
 
-  (orderItems ?? []).forEach((orderItem) => {
-    if (!orderItem.menu_item_id) return;
+  orderItemRows.forEach((orderItem) => {
+    const orderQuantity = Math.max(1, Number(orderItem.quantity ?? 1));
+    const itemRequirements = (requirements ?? []).filter((requirement) => requirement.menu_item_id === orderItem.menu_item_id);
 
-    (requirements ?? [])
-      .filter((requirement) => requirement.menu_item_id === orderItem.menu_item_id)
-      .forEach((requirement) => {
+    if (itemRequirements.length > 0) {
+      itemRequirements.forEach((requirement) => {
         const typedRequirement = requirement as unknown as InventoryRequirement;
         const inventory = Array.isArray(typedRequirement.inventory_items)
           ? typedRequirement.inventory_items[0]
           : typedRequirement.inventory_items;
         if (!inventory) return;
 
-        const orderQuantity = Math.max(1, Number(orderItem.quantity ?? 1));
         const requiredQuantity = Number(typedRequirement.quantity_required) * orderQuantity;
         const previous = requiredByInventoryId.get(typedRequirement.inventory_item_id);
 
@@ -111,7 +140,30 @@ async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orde
           requiredQuantity: (previous?.requiredQuantity ?? 0) + requiredQuantity,
         });
       });
+      return;
+    }
+
+    const matchedInventory = inventoryByName.get(normalizeInventoryName(orderItem.item_name));
+    if (!matchedInventory) {
+      unmatchedItems.push(orderItem.item_name);
+      return;
+    }
+
+    const previous = requiredByInventoryId.get(matchedInventory.id);
+    requiredByInventoryId.set(matchedInventory.id, {
+      name: matchedInventory.name,
+      currentQuantity: Number(matchedInventory.quantity),
+      requiredQuantity: (previous?.requiredQuantity ?? 0) + orderQuantity,
+    });
   });
+
+  if (unmatchedItems.length > 0) {
+    throw new Error(`No inventory stock found for: ${Array.from(new Set(unmatchedItems)).join(", ")}. Add a menu inventory requirement or an inventory item with the same name.`);
+  }
+
+  if (requiredByInventoryId.size === 0) {
+    throw new Error("No inventory stock matched this order. Add inventory requirements or matching inventory item names before completing the order.");
+  }
 
   for (const item of requiredByInventoryId.values()) {
     if (item.currentQuantity < item.requiredQuantity) {
@@ -124,7 +176,9 @@ async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orde
       .from("inventory_items")
       .update({ quantity: item.currentQuantity - item.requiredQuantity })
       .eq("id", inventoryId)
-      .gte("quantity", item.requiredQuantity);
+      .gte("quantity", item.requiredQuantity)
+      .select("id")
+      .single();
 
     if (stockUpdateError) throw stockUpdateError;
   }
@@ -189,22 +243,42 @@ export async function POST(request: Request) {
     console.log("[orders/status] current order found", { orderId: currentOrder.id, previousStatus: currentOrder.status, nextStatus: status });
 
     let inventoryDeducted = false;
-    const inventoryDeductedAt = status === "Completed"
-      ? await getInventoryDeductedAt(serviceSupabase, orderId)
-      : null;
+    let inventoryClaimed = false;
+    const alreadyInventoryDeducted = status === "Completed"
+      ? await getInventoryDeducted(serviceSupabase, orderId)
+      : false;
 
-    if (status === "Completed" && !inventoryDeductedAt) {
+    if (status === "Completed" && !alreadyInventoryDeducted) {
+      const { data: claimedOrder, error: claimError } = await serviceSupabase
+        .from("orders")
+        .update({ status, inventory_deducted: true })
+        .eq("id", orderId)
+        .eq("inventory_deducted", false)
+        .select("id")
+        .single();
+
+      if (claimError || !claimedOrder) {
+        console.error("[orders/status] inventory deduction claim failed", claimError, { orderId, status });
+        throw claimError ?? new Error("Unable to reserve this order for inventory deduction.");
+      }
+
+      inventoryClaimed = true;
+
       try {
         await deductOrderInventory(serviceSupabase, orderId);
         inventoryDeducted = true;
       } catch (error) {
         console.error("[orders/status] inventory deduction failed", error, { orderId, status });
+        await serviceSupabase
+          .from("orders")
+          .update({ status: currentOrder.status, inventory_deducted: false })
+          .eq("id", orderId);
         throw error;
       }
     }
 
-    const updatePatch = status === "Completed" && inventoryDeducted
-      ? { status, inventory_deducted_at: new Date().toISOString() }
+    const updatePatch = status === "Completed" && inventoryClaimed
+      ? { status, inventory_deducted: true }
       : { status };
 
     const { data: savedOrder, error: updateError } = await serviceSupabase
@@ -219,7 +293,7 @@ export async function POST(request: Request) {
 
       if (status === "Completed" && inventoryDeducted && isMissingInventoryDeductionColumn(updateError)) {
         return NextResponse.json(
-          { error: "Database setup is missing orders.inventory_deducted_at. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again." },
+          { error: "Database setup is missing orders.inventory_deducted. Run supabase/order_inventory_deduction_setup.sql in Supabase SQL Editor, then try again." },
           { status: 500 }
         );
       }
@@ -230,19 +304,6 @@ export async function POST(request: Request) {
     if (!savedOrder) {
       console.error("[orders/status] Supabase update returned no order", { orderId, status });
       return NextResponse.json({ error: "Order update did not return a saved row. Please verify the order ID exists." }, { status: 404 });
-    }
-
-    if (status === "Completed" && inventoryDeducted && !("inventory_deducted_at" in savedOrder)) {
-      const { error: markerError } = await serviceSupabase
-        .from("orders")
-        .update({ inventory_deducted_at: new Date().toISOString() })
-        .eq("id", orderId)
-        .is("inventory_deducted_at", null);
-
-      if (markerError) {
-        console.error("[orders/status] inventory marker update failed", markerError, { orderId, status });
-        throw markerError;
-      }
     }
 
     const { data: updatedOrder, error: updatedOrderError } = await serviceSupabase

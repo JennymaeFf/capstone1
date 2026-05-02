@@ -225,6 +225,7 @@ export type Database = {
           selected_bank: string | null;
           payment_reference: string | null;
           payment_proof_url: string | null;
+          inventory_deducted: boolean;
           inventory_deducted_at: string | null;
           created_at: string;
           updated_at: string;
@@ -244,6 +245,7 @@ export type Database = {
           selected_bank?: string | null;
           payment_reference?: string | null;
           payment_proof_url?: string | null;
+          inventory_deducted?: boolean;
           inventory_deducted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -263,6 +265,7 @@ export type Database = {
           selected_bank?: string | null;
           payment_reference?: string | null;
           payment_proof_url?: string | null;
+          inventory_deducted?: boolean;
           inventory_deducted_at?: string | null;
           created_at?: string;
           updated_at?: string;

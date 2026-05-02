@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   createMenuAddon,
@@ -35,6 +35,13 @@ type MenuAddon = Awaited<ReturnType<typeof getMenuAddons>>[number];
 type AdminOrder = Awaited<ReturnType<typeof getAdminOrders>>[number];
 type AdminMessage = Awaited<ReturnType<typeof getAdminContactMessages>>[number];
 type InventoryType = InventoryRow["inventory_type"];
+type MessageBubbleItem = {
+  id: string;
+  sender: "admin" | "customer";
+  label: string;
+  text: string;
+  date: string;
+};
 
 const CATEGORIES = [
   "Lemonade Series",
@@ -802,7 +809,15 @@ function AdminMessagesPanel({
   onMarkRead: (id: string) => Promise<void>;
 }) {
   const conversations = useMemo(() => {
-    const grouped = new Map<string, { id: string; name: string; email: string; messages: AdminMessage[]; latest: AdminMessage; unreadCount: number }>();
+    const grouped = new Map<string, {
+      id: string;
+      name: string;
+      email: string;
+      messages: AdminMessage[];
+      latestAt: string;
+      latestText: string;
+      unreadCount: number;
+    }>();
 
     messages.forEach((message) => {
       const id = message.user_id ?? message.email;
@@ -810,25 +825,38 @@ function AdminMessagesPanel({
       const nextMessages = [...(existing?.messages ?? []), message].sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
-      const latest = nextMessages[nextMessages.length - 1];
+      const timeline = buildContactMessageTimeline(nextMessages);
+      const latest = timeline[timeline.length - 1];
 
       grouped.set(id, {
         id,
         name: message.name,
         email: message.email,
         messages: nextMessages,
-        latest,
+        latestAt: latest?.date ?? message.created_at,
+        latestText: latest?.text ?? message.message,
         unreadCount: nextMessages.filter((item) => item.status === "Unread").length,
       });
     });
 
     return Array.from(grouped.values()).sort(
-      (a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime()
+      (a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
     );
   }, [messages]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
   const replyTarget = selectedConversation?.messages[selectedConversation.messages.length - 1];
+  const selectedTimeline = useMemo(
+    () => buildContactMessageTimeline(selectedConversation?.messages ?? []),
+    [selectedConversation]
+  );
+  const adminThreadEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      adminThreadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [selectedConversation, selectedTimeline.length]);
 
   return (
     <Panel title="Customer Messages">
@@ -853,15 +881,16 @@ function AdminMessagesPanel({
           </div>
 
           <div className="max-h-[520px] min-h-[360px] space-y-4 overflow-y-auto px-4 py-4">
-            {selectedConversation.messages.map((item) => (
-              <div key={item.id} className="space-y-2">
-                <ChatBubble align="left" label={item.name} text={item.message} date={item.created_at} />
-                {item.admin_reply && <ChatBubble align="right" label="Admin" text={item.admin_reply} date={item.replied_at ?? item.created_at} />}
-                {item.customer_reply && (
-                  <ChatBubble align="left" label={item.name} text={item.customer_reply} date={item.customer_replied_at ?? item.created_at} />
-                )}
-              </div>
+            {selectedTimeline.map((item) => (
+              <ChatBubble
+                key={item.id}
+                align={item.sender === "admin" ? "right" : "left"}
+                label={item.label}
+                text={item.text}
+                date={item.date}
+              />
             ))}
+            <div ref={adminThreadEndRef} />
           </div>
 
           <div className="border-t border-[#e4eddb] bg-white p-3">
@@ -901,9 +930,9 @@ function AdminMessagesPanel({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-extrabold text-[#174b21]">{conversation.name}</span>
-                  <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(conversation.latest.created_at)}</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(conversation.latestAt)}</span>
                 </span>
-                <span className="mt-1 block truncate text-xs text-[#6f625a]">{shortenText(getMessagePreview(conversation.latest), 86)}</span>
+                <span className="mt-1 block truncate text-xs text-[#6f625a]">{shortenText(conversation.latestText, 86)}</span>
               </span>
               {conversation.unreadCount > 0 && (
                 <span className="mt-1 rounded-full bg-[#f57c00] px-2 py-0.5 text-[10px] font-bold text-white">
@@ -922,6 +951,44 @@ function shortenText(text: string, maxLength: number) {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function buildContactMessageTimeline(messages: AdminMessage[]): MessageBubbleItem[] {
+  return messages
+    .flatMap((message) => {
+      const items: MessageBubbleItem[] = [
+        {
+          id: `${message.id}-customer-message`,
+          sender: "customer",
+          label: message.name,
+          text: message.message,
+          date: message.created_at,
+        },
+      ];
+
+      if (message.admin_reply) {
+        items.push({
+          id: `${message.id}-admin-reply`,
+          sender: "admin",
+          label: "Admin",
+          text: message.admin_reply,
+          date: message.replied_at ?? message.created_at,
+        });
+      }
+
+      if (message.customer_reply) {
+        items.push({
+          id: `${message.id}-customer-reply`,
+          sender: "customer",
+          label: message.name,
+          text: message.customer_reply,
+          date: message.customer_replied_at ?? message.created_at,
+        });
+      }
+
+      return items;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 function ChatBubble({ align, label, text, date }: { align: "left" | "right"; label: string; text: string; date: string }) {
@@ -944,10 +1011,6 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "C";
-}
-
-function getMessagePreview(message: AdminMessage) {
-  return message.customer_reply || message.admin_reply || message.message;
 }
 
 function formatShortDate(date: string) {

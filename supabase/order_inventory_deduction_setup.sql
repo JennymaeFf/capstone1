@@ -2,4 +2,4 @@
 -- deduction when an admin marks an order as Completed.
 
 alter table public.orders
-add column if not exists inventory_deducted_at timestamptz;
+add column if not exists inventory_deducted boolean default false;
