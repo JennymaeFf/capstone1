@@ -51,8 +51,8 @@ const CATEGORIES = [
 ];
 
 const INVENTORY_TYPES: InventoryType[] = ["ingredient", "packaging", "addon", "beverage"];
-const ORDER_STATUSES = ["Pending", "Preparing", "On the way", "Delivered"];
-const REPORT_ORDER_STATUSES = [...ORDER_STATUSES, "Completed", "Cancelled"];
+const ORDER_STATUSES = ["Pending", "Preparing", "On the way", "Delivered", "Completed"];
+const REPORT_ORDER_STATUSES = [...ORDER_STATUSES, "Cancelled"];
 const ADMIN_TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "reports", label: "Reports" },
@@ -343,6 +343,10 @@ export default function AdminPage() {
 
       if (result.warning) {
         setMessage(result.warning);
+      } else if (result.inventoryDeducted && result.emailSent) {
+        setMessage("Order completed, inventory deducted, and customer email sent.");
+      } else if (result.inventoryDeducted) {
+        setMessage("Order completed and inventory deducted.");
       } else if (result.emailSent) {
         setMessage("Order status updated and customer email sent.");
       } else {
@@ -725,7 +729,7 @@ export default function AdminPage() {
             {activeTab === "orders" && (
               <Panel title="Orders Management">
             <DataTable
-              headers={["Customer", "Order", "Total", "Payment", "Delivery", "Status"]}
+              headers={["Customer", "Order", "Total", "Payment", "Status"]}
               rows={orders.map((order) => [
                 <div key={order.id} className="min-w-[150px]">
                   <p className="font-bold text-[#174b21]">{order.customer_name ?? "Customer"}</p>
@@ -762,7 +766,6 @@ export default function AdminPage() {
                     </a>
                   )}
                 </div>,
-                `P${Number(order.delivery_fee ?? 0).toFixed(2)}`,
                 <select
                   key={order.id}
                   value={order.status}
@@ -797,74 +800,160 @@ function AdminMessagesPanel({
   onReply: (id: string) => Promise<void>;
   onMarkRead: (id: string) => Promise<void>;
 }) {
+  const conversations = useMemo(() => {
+    const grouped = new Map<string, { id: string; name: string; email: string; messages: AdminMessage[]; latest: AdminMessage; unreadCount: number }>();
+
+    messages.forEach((message) => {
+      const id = message.user_id ?? message.email;
+      const existing = grouped.get(id);
+      const nextMessages = [...(existing?.messages ?? []), message].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      const latest = nextMessages[nextMessages.length - 1];
+
+      grouped.set(id, {
+        id,
+        name: message.name,
+        email: message.email,
+        messages: nextMessages,
+        latest,
+        unreadCount: nextMessages.filter((item) => item.status === "Unread").length,
+      });
+    });
+
+    return Array.from(grouped.values()).sort(
+      (a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime()
+    );
+  }, [messages]);
+  const [selectedConversationId, setSelectedConversationId] = useState("");
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0];
+  const replyTarget = selectedConversation?.messages[selectedConversation.messages.length - 1];
+
   return (
     <Panel title="Customer Messages">
       {messages.length === 0 ? (
         <p className="rounded-lg border border-[#eef3e8] bg-[#fbfdf8] px-3 py-8 text-center text-sm text-[#7b7169]">No messages yet.</p>
       ) : (
-        <div className="space-y-3">
-          {messages.map((item) => (
-            <article key={item.id} className="rounded-lg border border-[#eef3e8] bg-[#fbfdf8] p-4">
-              <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-bold text-[#174b21]">{item.name}</h3>
-                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${
-                      item.status === "Replied"
-                        ? "bg-[#DDF8B1] text-[#174b21]"
-                        : item.status === "Read"
-                          ? "bg-[#edf5e5] text-[#31502a]"
-                          : "bg-[#fff3e0] text-[#f57c00]"
-                    }`}>
-                      {item.status}
+        <div className="grid overflow-hidden rounded-lg border border-[#e4eddb] bg-[#fbfdf8] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="border-b border-[#e4eddb] bg-white lg:border-b-0 lg:border-r">
+            <div className="border-b border-[#eef3e8] px-3 py-3">
+              <p className="text-xs font-bold uppercase text-[#5f8f49]">Inbox</p>
+            </div>
+            <div className="max-h-[620px] overflow-y-auto">
+              {conversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  onClick={() => {
+                    setSelectedConversationId(conversation.id);
+                    conversation.messages
+                      .filter((item) => item.status === "Unread")
+                      .forEach((item) => void onMarkRead(item.id));
+                  }}
+                  className={`flex w-full items-start gap-3 border-b border-[#f0f4eb] px-3 py-3 text-left transition ${
+                    selectedConversation?.id === conversation.id ? "bg-[#edf5e5]" : "bg-white hover:bg-[#f8fbf4]"
+                  }`}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
+                    {getInitials(conversation.name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-extrabold text-[#174b21]">{conversation.name}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-[#8a7a70]">{formatShortDate(conversation.latest.created_at)}</span>
                     </span>
+                    <span className="mt-0.5 block truncate text-xs text-[#6f625a]">{getMessagePreview(conversation.latest)}</span>
+                  </span>
+                  {conversation.unreadCount > 0 && (
+                    <span className="mt-1 rounded-full bg-[#f57c00] px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-h-[560px] flex-col bg-[#f6faef]">
+            {selectedConversation && replyTarget ? (
+              <>
+                <div className="border-b border-[#e4eddb] bg-white px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#246b2d] text-sm font-extrabold text-white">
+                      {getInitials(selectedConversation.name)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-extrabold text-[#174b21]">{selectedConversation.name}</p>
+                      <p className="truncate text-xs text-[#6f625a]">{selectedConversation.email}</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#6f625a]">{item.email} | {new Date(item.created_at).toLocaleString("en-PH")}</p>
                 </div>
-                {item.status === "Unread" && (
-                  <button onClick={() => void onMarkRead(item.id)} className="w-fit rounded-md border border-[#cbdcbe] px-2 py-1 text-xs font-bold text-[#174b21] transition hover:bg-[#edf5e5]">
-                    Mark Read
-                  </button>
-                )}
-              </div>
 
-              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-[#3f322b]">{item.message}</p>
-
-              {item.customer_reply && (
-                <div className="mt-3 rounded-lg border border-[#d8e5cc] bg-white px-3 py-2">
-                  <p className="mb-1 text-xs font-bold uppercase text-[#5f8f49]">Customer Reply</p>
-                  <p className="whitespace-pre-wrap text-sm text-[#3f322b]">{item.customer_reply}</p>
-                  {item.customer_replied_at && <p className="mt-1 text-xs text-[#6f625a]">{new Date(item.customer_replied_at).toLocaleString("en-PH")}</p>}
+                <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                  {selectedConversation.messages.map((item) => (
+                    <div key={item.id} className="space-y-2">
+                      <ChatBubble align="left" label={item.name} text={item.message} date={item.created_at} />
+                      {item.admin_reply && <ChatBubble align="right" label="Admin" text={item.admin_reply} date={item.replied_at ?? item.created_at} />}
+                      {item.customer_reply && (
+                        <ChatBubble align="left" label={item.name} text={item.customer_reply} date={item.customer_replied_at ?? item.created_at} />
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
 
-              {item.admin_reply && (
-                <div className="mt-3 rounded-lg border border-[#d8e5cc] bg-white px-3 py-2">
-                  <p className="mb-1 text-xs font-bold uppercase text-[#5f8f49]">Reply sent</p>
-                  <p className="whitespace-pre-wrap text-sm text-[#3f322b]">{item.admin_reply}</p>
-                  {item.replied_at && <p className="mt-1 text-xs text-[#6f625a]">{new Date(item.replied_at).toLocaleString("en-PH")}</p>}
+                <div className="border-t border-[#e4eddb] bg-white p-3">
+                  <textarea
+                    value={replyDrafts[replyTarget.id] ?? ""}
+                    onChange={(event) => onReplyChange(replyTarget.id, event.target.value)}
+                    placeholder="Write admin reply..."
+                    className="h-20 w-full resize-none rounded-lg border border-[#cbdcbe] bg-[#fbfdf8] px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:bg-white focus:ring-2 focus:ring-[#cfe8bc]"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => void onReply(replyTarget.id)}
+                      disabled={!replyDrafts[replyTarget.id]?.trim()}
+                      className="rounded-lg bg-[#246b2d] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
-              )}
-
-              <div className="mt-3">
-                <textarea
-                  value={replyDrafts[item.id] ?? ""}
-                  onChange={(event) => onReplyChange(item.id, event.target.value)}
-                  placeholder={item.admin_reply ? "Write a new reply..." : "Write admin reply..."}
-                  className="h-24 w-full resize-none rounded-lg border border-[#cbdcbe] bg-white px-3 py-2 text-sm text-[#2f2924] outline-none transition focus:border-[#8bbd66] focus:ring-2 focus:ring-[#cfe8bc]"
-                />
-                <div className="mt-2 flex justify-end">
-                  <button onClick={() => void onReply(item.id)} className="rounded-lg bg-[#246b2d] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b5e20]">
-                    Send Reply
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center px-4 text-sm text-[#7b7169]">Select a conversation.</div>
+            )}
+          </div>
         </div>
       )}
     </Panel>
   );
+}
+
+function ChatBubble({ align, label, text, date }: { align: "left" | "right"; label: string; text: string; date: string }) {
+  const isRight = align === "right";
+  return (
+    <div className={`flex ${isRight ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${isRight ? "bg-[#246b2d] text-white" : "bg-white text-[#3f322b]"}`}>
+        <p className={`mb-1 text-[11px] font-bold ${isRight ? "text-[#d9f4c6]" : "text-[#5f8f49]"}`}>{label}</p>
+        <p className="whitespace-pre-wrap leading-relaxed">{text}</p>
+        <p className={`mt-1 text-[10px] ${isRight ? "text-[#d9f4c6]" : "text-[#8a7a70]"}`}>{formatShortDate(date)}</p>
+      </div>
+    </div>
+  );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "C";
+}
+
+function getMessagePreview(message: AdminMessage) {
+  return message.customer_reply || message.admin_reply || message.message;
+}
+
+function formatShortDate(date: string) {
+  return new Date(date).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

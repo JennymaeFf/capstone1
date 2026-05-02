@@ -15,7 +15,7 @@ const ORDER_STATUSES = new Map([
   ["completed", "Completed"],
   ["cancelled", "Cancelled"],
 ]);
-const EMAIL_STATUSES = new Set(["Pending", "Preparing", "On the way", "Delivered"]);
+const EMAIL_STATUSES = new Set(["Pending", "Preparing", "On the way", "Delivered", "Completed"]);
 
 function normalizeOrderStatus(status: string) {
   return ORDER_STATUSES.get(status.trim().toLowerCase()) ?? "";
@@ -27,6 +27,82 @@ type OrderItemForEmail = {
   unit_price: number;
   size_label: string | null;
 };
+
+type SupabaseServiceClient = ReturnType<typeof getSupabaseServiceClient>;
+
+type InventoryRequirement = {
+  inventory_item_id: string;
+  quantity_required: number;
+  inventory_items: { id: string; name: string; quantity: number } | { id: string; name: string; quantity: number }[] | null;
+};
+
+async function deductOrderInventory(serviceSupabase: SupabaseServiceClient, orderId: string) {
+  const { data: orderItems, error: orderItemsError } = await serviceSupabase
+    .from("order_items")
+    .select("menu_item_id, item_name, quantity")
+    .eq("order_id", orderId);
+
+  if (orderItemsError) throw orderItemsError;
+
+  const menuItemIds = Array.from(new Set((orderItems ?? []).map((item) => item.menu_item_id).filter((id): id is string => Boolean(id))));
+  if (menuItemIds.length === 0) return 0;
+
+  const { data: requirements, error: requirementsError } = await serviceSupabase
+    .from("menu_item_inventory_requirements")
+    .select("menu_item_id, inventory_item_id, quantity_required, inventory_items(id, name, quantity)")
+    .in("menu_item_id", menuItemIds);
+
+  if (requirementsError) throw requirementsError;
+
+  const requiredByInventoryId = new Map<string, { name: string; currentQuantity: number; requiredQuantity: number }>();
+
+  (orderItems ?? []).forEach((orderItem) => {
+    if (!orderItem.menu_item_id) return;
+
+    (requirements ?? [])
+      .filter((requirement) => requirement.menu_item_id === orderItem.menu_item_id)
+      .forEach((requirement) => {
+        const typedRequirement = requirement as unknown as InventoryRequirement;
+        const inventory = Array.isArray(typedRequirement.inventory_items)
+          ? typedRequirement.inventory_items[0]
+          : typedRequirement.inventory_items;
+        if (!inventory) return;
+
+        const orderQuantity = Math.max(1, Number(orderItem.quantity ?? 1));
+        const requiredQuantity = Number(typedRequirement.quantity_required) * orderQuantity;
+        const previous = requiredByInventoryId.get(typedRequirement.inventory_item_id);
+
+        requiredByInventoryId.set(typedRequirement.inventory_item_id, {
+          name: inventory.name,
+          currentQuantity: Number(inventory.quantity),
+          requiredQuantity: (previous?.requiredQuantity ?? 0) + requiredQuantity,
+        });
+      });
+  });
+
+  for (const item of requiredByInventoryId.values()) {
+    if (item.currentQuantity < item.requiredQuantity) {
+      throw new Error(`${item.name} stock is not enough. Available: ${item.currentQuantity}, needed: ${item.requiredQuantity}.`);
+    }
+  }
+
+  for (const [inventoryId, item] of requiredByInventoryId) {
+    const { error: stockUpdateError } = await serviceSupabase
+      .from("inventory_items")
+      .update({ quantity: item.currentQuantity - item.requiredQuantity })
+      .eq("id", inventoryId)
+      .gte("quantity", item.requiredQuantity);
+
+    if (stockUpdateError) throw stockUpdateError;
+  }
+
+  if (requiredByInventoryId.size > 0) {
+    const { error: syncError } = await serviceSupabase.rpc("sync_menu_item_availability", { p_menu_item_id: null });
+    if (syncError) throw syncError;
+  }
+
+  return requiredByInventoryId.size;
+}
 
 export async function POST(request: Request) {
   try {
@@ -65,6 +141,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     }
 
+    const { data: currentOrder, error: currentOrderError } = await serviceSupabase
+      .from("orders")
+      .select("id, status, inventory_deducted_at")
+      .eq("id", orderId)
+      .single();
+
+    if (currentOrderError) throw currentOrderError;
+
     const { error: updateError } = await serviceSupabase
       .from("orders")
       .update({ status })
@@ -73,6 +157,25 @@ export async function POST(request: Request) {
       .single();
 
     if (updateError) throw updateError;
+
+    let inventoryDeducted = false;
+
+    if (status === "Completed" && !currentOrder.inventory_deducted_at) {
+      try {
+        await deductOrderInventory(serviceSupabase, orderId);
+        const { error: deductedAtError } = await serviceSupabase
+          .from("orders")
+          .update({ inventory_deducted_at: new Date().toISOString() })
+          .eq("id", orderId)
+          .is("inventory_deducted_at", null);
+
+        if (deductedAtError) throw deductedAtError;
+      } catch (error) {
+        await serviceSupabase.from("orders").update({ status: currentOrder.status }).eq("id", orderId);
+        throw error;
+      }
+      inventoryDeducted = true;
+    }
 
     const { data: updatedOrder, error: updatedOrderError } = await serviceSupabase
       .from("orders")
@@ -127,7 +230,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ order: updatedOrder, emailSent, warning: emailWarning });
+    return NextResponse.json({ order: updatedOrder, emailSent, warning: emailWarning, inventoryDeducted });
   } catch (error) {
     console.error("[orders/status]", error);
     return NextResponse.json({ error: "Unable to update order status right now." }, { status: 500 });
